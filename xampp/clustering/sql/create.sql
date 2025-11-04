@@ -1,0 +1,8 @@
+create database clustering;
+use clustering;
+
+CREATE TABLE sessions (
+  id VARCHAR(255) PRIMARY KEY,
+  data TEXT,
+  last_access TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);

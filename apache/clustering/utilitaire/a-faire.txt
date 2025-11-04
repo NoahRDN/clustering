@@ -1,0 +1,16 @@
+objectif: clustering avec utilisation HA-proxy
+
+scenario 1: 
+on configure  HA-proxy pour que quand une personne accede aux site, le fichier le redirige vers le serveur disponible d'abord et alterne en  les deux serveur
+
+scenario 2: 
+utiliser la session normal dans PHP et puis une autre avec une base de donnee gerer avec php handler et upis faire la comparaison remarquer (le test de  session est base sur l'exercice couleur prefere de spring MVC S4)
+
+scenario 3 :
+configuree HA proxy pour gerer la session, c'est a dire si on pose 2 serveur aux debut, et que le client est rediriger sur l'un de se serveur , et se connecter sur cette serveur et donc une session est  creer, par consequent, il va toujoutrs etre rediriger vers cette serveur excepter si ce serveur ne marche plus. l'utilisation de session au niveau du coe sera comme le session normal 
+
+scenario 4:
+creer une deuxieme configuration HA Proxy (differenter par une port d'ecoute different avec le premier), dont ce deuxieme fichier de configuration, gerera la base de donne qui sera deux base de donnée base en master to master (une modification dans le premier base de donne sera automatiquement effectuer aussi dans le deuxieme et vice versa). les serveurs web utiliseront ces base doe donne en passons par le deuxieme configration de HA-proxy
+
+scenario 5: 
+Creer une page wbe pour gereeer la création de nouvelle serveur web et base de donnee et aussi pour voir l'etat des serveur web et base de donnee pour ne plus toucher au fichier dee configration pour ces actioons mais directement le faire avec le web 

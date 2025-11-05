@@ -1,0 +1,47 @@
+services:
+  # ---------------------------
+  # 🔹 HAProxy (load balancer)
+  # ---------------------------
+  haproxy:
+    image: haproxy:2.9
+    container_name: haproxy
+    ports:
+      - "8080:8080"   # Port public du site
+      - "8404:8404"   # Page de statistiques
+    volumes:
+      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
+    depends_on:
+      - web1
+      - web2
+    networks:
+      - public_net     # Accessible depuis l'extérieur
+      - private_net    # Connecté aux serveurs web
+
+  # ---------------------------
+  # 🔹 Serveur Web 1 (Apache)
+  # ---------------------------
+  web1:
+    image: httpd:2.4
+    container_name: web1
+    volumes:
+      - ./web/web1:/usr/local/apache2/htdocs/
+    networks:
+      - private_net    # Seulement accessible par HAProxy
+
+  # ---------------------------
+  # 🔹 Serveur Web 2 (Apache)
+  # ---------------------------
+  web2:
+    image: httpd:2.4
+    container_name: web2
+    volumes:
+      - ./web/web2:/usr/local/apache2/htdocs/
+    networks:
+      - private_net    # Seulement accessible par HAProxy
+
+# ---------------------------
+# 🔹 Réseaux
+# ---------------------------
+networks:
+  public_net:      # Simule Internet (HAProxy visible ici)
+  private_net:     # Simule un réseau interne (LAN)

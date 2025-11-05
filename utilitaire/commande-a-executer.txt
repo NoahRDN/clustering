@@ -3,3 +3,10 @@ docker compose up -d
 docker save -o ubuntu_22_04.tar ubuntu:22.04
 
 docker load -i ubuntu_22_04.tar
+
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+
+docker exec -it web1 bash
+php -m | grep pdo

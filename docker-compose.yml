@@ -6,42 +6,64 @@ services:
     image: haproxy:2.9
     container_name: haproxy
     ports:
-      - "8080:8080"   # Port public du site
-      - "8404:8404"   # Page de statistiques
+      - "8080:8080"     # Port public du site
+      - "8404:8404"     # Statistiques
     volumes:
       - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
     depends_on:
       - web1
       - web2
+      - mysql
     networks:
-      - public_net     # Accessible depuis l'extérieur
-      - private_net    # Connecté aux serveurs web
+      - public_net
+      - private_net
 
   # ---------------------------
-  # 🔹 Serveur Web 1 (Apache)
+  # 🔹 Serveur Web 1 (Apache + PHP)
   # ---------------------------
   web1:
-    image: httpd:2.4
+    image: php:8.2-apache
     container_name: web1
     volumes:
-      - ./web/web1:/usr/local/apache2/htdocs/
+      - ./web/web1:/var/www/html
+    depends_on:
+      - mysql
     networks:
-      - private_net    # Seulement accessible par HAProxy
+      - private_net
+    command: >
+      bash -c "docker-php-ext-install pdo pdo_mysql && apache2-foreground"
 
   # ---------------------------
-  # 🔹 Serveur Web 2 (Apache)
+  # 🔹 Serveur Web 2 (Apache + PHP)
   # ---------------------------
   web2:
-    image: httpd:2.4
+    image: php:8.2-apache
     container_name: web2
     volumes:
-      - ./web/web2:/usr/local/apache2/htdocs/
+      - ./web/web2:/var/www/html
+    depends_on:
+      - mysql
     networks:
-      - private_net    # Seulement accessible par HAProxy
+      - private_net
+    command: >
+      bash -c "docker-php-ext-install pdo pdo_mysql && apache2-foreground"
+  # ---------------------------
+  # 🔹 Base de données MySQL
+  # ---------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: sessions_test
+    volumes:
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - private_net
 
 # ---------------------------
 # 🔹 Réseaux
 # ---------------------------
 networks:
-  public_net:      # Simule Internet (HAProxy visible ici)
-  private_net:     # Simule un réseau interne (LAN)
+  public_net:
+  private_net:

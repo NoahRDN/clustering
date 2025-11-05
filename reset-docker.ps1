@@ -5,7 +5,7 @@
 
 Write-Host "=== Nettoyage et redemarrage des conteneurs Docker ===" -ForegroundColor Cyan
 
-# Arrêt et suppression des conteneurs existants
+#  Arrêt et suppression des conteneurs existants
 Write-Host ">> Arret et suppression des conteneurs existants..." -ForegroundColor Yellow
 docker compose down --remove-orphans
 
@@ -16,10 +16,6 @@ docker rm -f mysql1 mysql2 haproxy-db 2>$null
 # Nettoyage des réseaux Docker inutilisés
 Write-Host ">> Nettoyage des reseaux Docker inutilises..." -ForegroundColor Yellow
 docker network prune -f
-
-# Rendre le script Bash exécutable (pour WSL)
-Write-Host ">> Configuration des permissions du script de replication..." -ForegroundColor Yellow
-wsl chmod +x /mnt/h/itu/s5/clustering/clustering/scripts/setup-replication.sh
 
 # Redémarrage de la stack Docker Compose
 Write-Host ">> Redemarrage de la stack Docker Compose..." -ForegroundColor Green

@@ -1,3 +1,0 @@
-emplacement fichier de configuration: 
-
-/etc/haproxy/haproxy.cfg

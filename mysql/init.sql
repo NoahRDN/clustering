@@ -1,6 +1,3 @@
-create database clustering;
-use clustering;
-
 CREATE TABLE sessions (
   id VARCHAR(255) PRIMARY KEY,
   data TEXT,

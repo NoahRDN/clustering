@@ -1,20 +1,32 @@
 <?php
+require_once 'db_session_handler.php';
+
+$dsn = 'mysql:host=haproxy-db;port=3307;dbname=clustering;charset=utf8mb4';
+$user = 'root';
+$pass = 'root';
+
+$pdo = new PDO($dsn, $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$handler = new DBSessionHandler($pdo);
+session_set_save_handler($handler, true);
 session_start();
 
 $server = gethostname();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $_SESSION['favorite_color'] = $_POST['color'];
+    header("Location: ?");
+    exit;
 }
+
 ?>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<title>Session locale - <?= htmlspecialchars($server) ?></title>
+<title>Session DB - <?= htmlspecialchars($server) ?></title>
 </head>
 <body style="font-family: Arial; padding: 20px;">
-<h1>Serveur <?= htmlspecialchars($server) ?></h1>
+<h1>Serveur <?= htmlspecialchars($server) ?> (Session en Base de Données) 💾</h1>
 
 <form method="post">
   <label>Ta couleur préférée :
@@ -25,8 +37,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <h2>Session actuelle</h2>
 <pre><?php print_r($_SESSION); ?></pre>
-
-<!-- <p><a href="?reload=1">🔁 Recharger (nouvelle requête GET)</a></p> -->
 
 </body>
 </html>

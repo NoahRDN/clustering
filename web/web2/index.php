@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <title>Session locale - <?= htmlspecialchars($server) ?></title>
 </head>
 <body style="font-family: Arial; padding: 20px;">
-<h1>Serveur <?= htmlspecialchars($server) ?> 🌐</h1>
+<h1>Serveur <?= htmlspecialchars($server) ?></h1>
 
 <form method="post">
   <label>Ta couleur préférée :
@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <h2>Session actuelle</h2>
 <pre><?php print_r($_SESSION); ?></pre>
 
-<p><a href="?reload=1">🔁 Recharger (nouvelle requête GET)</a></p>
+<!-- <p><a href="?reload=1">🔁 Recharger (nouvelle requête GET)</a></p> -->
 
 </body>
 </html>

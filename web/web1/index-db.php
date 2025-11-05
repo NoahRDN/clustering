@@ -1,7 +1,7 @@
 <?php
 require_once 'db_session_handler.php';
 
-$dsn = 'mysql:host=mysql;dbname=sessions_test;charset=utf8mb4';
+$dsn = 'mysql:host=haproxy-db;port=3307;dbname=clustering;charset=utf8mb4';
 $user = 'root';
 $pass = 'root';
 

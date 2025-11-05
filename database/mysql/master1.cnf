@@ -1,6 +1,0 @@
-[mysqld]
-server-id=1
-log-bin=mysql-bin
-binlog-format=ROW
-auto_increment_increment=2
-auto_increment_offset=1

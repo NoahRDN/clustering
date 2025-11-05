@@ -14,3 +14,12 @@ creer une deuxieme configuration HA Proxy (differenter par une port d'ecoute dif
 
 scenario 5: 
 Creer une page wbe pour gereeer la création de nouvelle serveur web et base de donnee et aussi pour voir l'etat des serveur web et base de donnee pour ne plus toucher au fichier dee configration pour ces actioons mais directement le faire avec le web 
+
+=========================
+nettoyage du code pour qu'il soit plus propre, presentable et comprehensible
+ajout commentaire pour faciliter la comprehension 
+redaction de readme 
+envoyer dans main 
+passer aux scenario 5 
+reverifier 
+envoyer aux main 

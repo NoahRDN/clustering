@@ -1,6 +1,7 @@
-create database clustering;
-use clustering;
-
+CREATE TABLE IF NOT EXISTS test_sync (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  msg VARCHAR(100)
+);
 CREATE TABLE sessions (
   id VARCHAR(255) PRIMARY KEY,
   data TEXT,

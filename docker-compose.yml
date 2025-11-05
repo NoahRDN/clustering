@@ -1,69 +1,113 @@
 services:
-  # ---------------------------
-  # 🔹 HAProxy (load balancer)
-  # ---------------------------
-  haproxy:
+  # ----------------------------
+  # 🔹 HAProxy pour les serveurs Web
+  # ----------------------------
+  haproxy-web:
     image: haproxy:2.9
-    container_name: haproxy
+    container_name: haproxy-web
     ports:
-      - "8080:8080"     # Port public du site
-      - "8404:8404"     # Statistiques
+      - "8080:8080"
+      - "8404:8404"
     volumes:
-      - ./haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
+      - ./haproxy-web/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
     depends_on:
       - web1
       - web2
-      - mysql
     networks:
       - public_net
       - private_net
 
-  # ---------------------------
-  # 🔹 Serveur Web 1 (Apache + PHP)
-  # ---------------------------
+  # ----------------------------
+  # 🔹 HAProxy pour la base de données
+  # ----------------------------
+  haproxy-db:
+    image: haproxy:2.9
+    container_name: haproxy-db
+    ports:
+      - "3307:3307"      # HAProxy écoute pour MySQL
+      - "8405:8405"      # page de stats DB
+    volumes:
+      - ./haproxy-db/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
+    depends_on:
+      - mysql1
+      - mysql2
+    networks:
+      - private_net
+
+  # ----------------------------
+  # 🔹 Serveurs web (PHP + Apache)
+  # ----------------------------
   web1:
     image: php:8.2-apache
     container_name: web1
     volumes:
       - ./web/web1:/var/www/html
     depends_on:
-      - mysql
+      - haproxy-db
     networks:
       - private_net
     command: >
       bash -c "docker-php-ext-install pdo pdo_mysql && apache2-foreground"
 
-  # ---------------------------
-  # 🔹 Serveur Web 2 (Apache + PHP)
-  # ---------------------------
   web2:
     image: php:8.2-apache
     container_name: web2
     volumes:
       - ./web/web2:/var/www/html
     depends_on:
-      - mysql
+      - haproxy-db
     networks:
       - private_net
     command: >
       bash -c "docker-php-ext-install pdo pdo_mysql && apache2-foreground"
-  # ---------------------------
-  # 🔹 Base de données MySQL
-  # ---------------------------
-  mysql:
+
+  # ----------------------------
+  # 🔹 Deux bases de données MySQL (master-master)
+  # ----------------------------
+  mysql1:
     image: mysql:8.0
-    container_name: mysql
+    container_name: mysql1
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: sessions_test
+      MYSQL_DATABASE: clustering
+      MYSQL_REPLICATION_USER: repl
+      MYSQL_REPLICATION_PASSWORD: replpass
     volumes:
-      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./mysql/mysql1/my.cnf:/etc/mysql/conf.d/my.cnf
+      - ./mysql/mysql1/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - private_net
 
-# ---------------------------
-# 🔹 Réseaux
-# ---------------------------
+  mysql2:
+    image: mysql:8.0
+    container_name: mysql2
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: clustering
+      MYSQL_REPLICATION_USER: repl
+      MYSQL_REPLICATION_PASSWORD: replpass
+    volumes:
+      - ./mysql/mysql2/my.cnf:/etc/mysql/conf.d/my.cnf
+      - ./mysql/mysql2/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - private_net
+
+  # -----------------------------------------------------
+  # 🔹 Service d’initialisation automatique de la réplication
+  # -----------------------------------------------------
+  replication-init:
+    image: mysql:8.0
+    container_name: replication-init
+    depends_on:
+      - mysql1
+      - mysql2
+    networks:
+      - private_net
+    volumes:
+      - ./scripts:/scripts
+    entrypoint: ["/bin/sh", "/scripts/setup-replication.sh"]
+
+
 networks:
   public_net:
   private_net:

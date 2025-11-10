@@ -58,3 +58,4 @@ backend web_back
 -> balance roundrobin: répartir les requêtes à tour de rôle entre les serveurs disponibles
 -> cookie SRV insert indirect nocache: 
     -> gere la persistence
+        -> Quand un utilisateur se connecte à web1, il faut qu’il revienne toujours sur le même serveur (pour ne pas perdre sa session PHP par exemple).

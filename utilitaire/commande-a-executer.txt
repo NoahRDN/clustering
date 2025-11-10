@@ -5,11 +5,11 @@ docker network prune -f
 docker compose up -d
 docker ps
 
-docker exec -it mysql1 bash -lc "chmod 644 /etc/mysql/conf.d/my.cnf"
-docker exec -it mysql2 bash -lc "chmod 644 /etc/mysql/conf.d/my.cnf"
-
 docker exec -it mysql1 mysql -u root -proot -e "SHOW MASTER STATUS;"
 docker exec -it mysql2 mysql -u root -proot -e "SHOW MASTER STATUS;"
+
+docker exec -it mysql1 bash -lc "chmod 644 /etc/mysql/conf.d/my.cnf"
+docker exec -it mysql2 bash -lc "chmod 644 /etc/mysql/conf.d/my.cnf"
 
 # Sur mysql1
 docker exec -it mysql1 mysql -u root -proot -e "

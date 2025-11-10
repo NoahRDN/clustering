@@ -79,6 +79,6 @@ sleep 2
 mysql -h mysql2 -uroot -proot --table -e "USE clustering; SELECT * FROM test_sync;"
 
 echo "📋 Vérification via HAProxy (port 3307) :"
-mysql -h haproxy-db -P 3307 -uroot -proot --table -e "USE clustering; SELECT * FROM test_sync;"
+mysql -h 127.0.0.1 -P 3307 -uroot -proot --table -e "USE clustering; SELECT * FROM test_sync;"
 
 echo "✅ Vérification automatique terminée !"

@@ -1,32 +1,21 @@
-# ===============================
-#  Script : reset-docker.ps1
-#  Objectif : Réinitialiser et redémarrer la stack Docker Compose
-# ===============================
-
-Write-Host "=== Nettoyage et redemarrage des conteneurs Docker ===" -ForegroundColor Cyan
-
-# Arrêt et suppression des conteneurs existants
-Write-Host ">> Arret et suppression des conteneurs existants..." -ForegroundColor Yellow
-docker compose down --remove-orphans
-
-# Suppression manuelle des conteneurs MySQL et HAProxy
-Write-Host ">> Suppression manuelle des conteneurs MySQL et HAProxy..." -ForegroundColor Yellow
-docker rm -f mysql1 mysql2 haproxy-db 2>$null
-
-# Nettoyage des réseaux Docker inutilisés
-Write-Host ">> Nettoyage des reseaux Docker inutilises..." -ForegroundColor Yellow
-docker network prune -f
-
-# Rendre le script Bash exécutable (pour WSL)
-Write-Host ">> Configuration des permissions du script de replication..." -ForegroundColor Yellow
-wsl chmod +x /mnt/h/itu/s5/clustering/clustering/scripts/setup-replication.sh
-
-# Redémarrage de la stack Docker Compose
-Write-Host ">> Redemarrage de la stack Docker Compose..." -ForegroundColor Green
 docker compose up -d
 
-# Liste des conteneurs actifs
-Write-Host "`n=== Liste des conteneurs actifs ===" -ForegroundColor Cyan
-docker ps
+docker save -o ubuntu_22_04.tar ubuntu:22.04
 
-Write-Host "`nTermine avec succes !" -ForegroundColor Green
+docker load -i ubuntu_22_04.tar
+
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+
+docker exec -it web1 bash
+php -m | grep pdo
+
+docker ps -a
+
+docker rm -f haproxy mysql
+wsl chmod +x ./scripts/setup-replication.sh
+
+docker inspect web3 | Select-String -Pattern "ExposedPorts" -Context 0,5
+docker inspect -f "{{json .Config.ExposedPorts}}" web3
+

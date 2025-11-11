@@ -1,0 +1,61 @@
+global = configuration générale du moteur HAProxy
+defaults = configuration par défaut pour les services HTTP/TCP
+
+global
+    log stdout format raw local0
+
+-> log stout: permet d'afficher directement les erreru dans le terminal ou ils est lancer. (dans notre cas logs de docker asoosicer au HA-Proxy)
+-> raw: format de sortie des logs dans le terminal (soit une logs remodifier par HA-Proxy, soit une logs simple tel quel sans modification effectuer par HA-proxy)
+-> local0: categorie de log choisie dont dans notre cas, une log systeme maisil y a aussi d'autre sorte de log dont ce sera en cfonction de cela le log choisie par consequent (log0 a log7)
+
+++++++++++
+# ---------------------------
+# PARAMÈTRES PAR DÉFAUT
+# ---------------------------
+defaults
+    mode http                 # HAProxy travaille ici en mode HTTP (non TCP)
+    option httplog            # Active un format de log optimisé pour HTTP
+    option http-server-close  # Ferme la connexion après chaque requête
+    timeout connect 5000      # Timeout de connexion au serveur backend (5s)
+    timeout client  50000     # Timeout côté client (50s)
+    timeout server  50000     # Timeout côté serveur (50s)
+
+-> mode http: permet de donner la possibilite a HA-proxy de lire un http et d'avoir acces a des fonctionnalite autours de cela (par exemple: cookie)
+-> option httplog : active un log adapte aux http, c'est a dire, afficher des log qui existe pour un http tel que code reponse, taile, temps Tq/Tw/Tc/Tr/Tt
+-> option http-server-close: ferme connexion a chaque requete: 
+    -> pour eviter que que chaque client monopolise la connexion 
+    -> Favorise la répartition (round-robin) requête par requête
+    -> Simplifie certains comportements (set-cookie par serveur, etc.)
+        -> Certaines options HTTP (comme set-cookie) servent à maintenir la session d’un utilisateur sur un même serveur web (on appelle ça une sticky session).
+-> timeout connect 5000: delai maximal qu'HA-proxy utilise pour 
+
+** Le round-robin est la stratégie d’équilibrage par défaut de HAProxy.
+    -> Chaque nouvelle requête est envoyée à tour de rôle à un serveur différent.
+
+++++++++++++++++++++++++++++++++++++
+# ---------------------------
+# 🔹 FRONTEND - Point d'entrée
+# ---------------------------
+frontend http_front
+    bind *:8080               # Écoute sur le port 8080 (accessible via http://localhost:8080)
+    default_backend web_back  # Redirige tout le trafic vers le backend nommé "web_back"
+
+
+-> frontend http_front	Le nom logique de ton point d’entrée (possibilite ).
+-> bind *:8080	: écoute sur toutes les IP (*) sur le port 8080”.
+-> default_backend web_back: Toutes les requêtes reçues seront redirigées vers le backend web_back.
+
+
+++++++++++++++++++++++++++++++++++++
+backend web_back
+    balance roundrobin
+    cookie SRV insert indirect nocache
+    option httpchk
+
+    server web1 web1:80 cookie S1 check
+    server web2 web2:80 cookie S2 check
+
+-> balance roundrobin: répartir les requêtes à tour de rôle entre les serveurs disponibles
+-> cookie SRV insert indirect nocache: 
+    -> gere la persistence
+        -> Quand un utilisateur se connecte à web1, il faut qu’il revienne toujours sur le même serveur (pour ne pas perdre sa session PHP par exemple).

@@ -16,8 +16,11 @@ wait_for_mysql() {
 wait_for_mysql mysql1
 wait_for_mysql mysql2
 
-echo "🔐 Configuration des permissions..."
-# chmod inutile ici : on configure via MySQL directement
+echo "🔐 Configuration des permissions et server IDs..."
+# Configuration des server_id uniques (car les fichiers my.cnf sont ignorés)
+mysql -h mysql1 -uroot -proot -e "SET GLOBAL server_id = 1;"
+mysql -h mysql2 -uroot -proot -e "SET GLOBAL server_id = 2;"
+echo "✅ Server IDs configurés : mysql1=1, mysql2=2"
 
 echo "👥 Création de l'utilisateur de réplication..."
 for host in mysql1 mysql2; do
@@ -40,8 +43,16 @@ EOF
 done
 
 
-echo "🔁 Configuration de la réplication Master <-> Master..."
-mysql -h mysql1 -uroot -proot <<EOF
+echo "� Vérification du mode GTID..."
+GTID_MODE1=$(mysql -h mysql1 -uroot -proot -sN -e "SELECT @@GLOBAL.GTID_MODE;")
+GTID_MODE2=$(mysql -h mysql2 -uroot -proot -sN -e "SELECT @@GLOBAL.GTID_MODE;")
+
+echo "GTID Mode mysql1: $GTID_MODE1"
+echo "GTID Mode mysql2: $GTID_MODE2"
+
+if [ "$GTID_MODE1" = "ON" ] && [ "$GTID_MODE2" = "ON" ]; then
+  echo "�🔁 Configuration de la réplication Master <-> Master avec GTID..."
+  mysql -h mysql1 -uroot -proot <<EOF
 STOP SLAVE;
 CHANGE MASTER TO 
   MASTER_HOST='mysql2',
@@ -51,7 +62,7 @@ CHANGE MASTER TO
 START SLAVE;
 EOF
 
-mysql -h mysql2 -uroot -proot <<EOF
+  mysql -h mysql2 -uroot -proot <<EOF
 STOP SLAVE;
 CHANGE MASTER TO 
   MASTER_HOST='mysql1',
@@ -60,6 +71,45 @@ CHANGE MASTER TO
   MASTER_AUTO_POSITION=1;
 START SLAVE;
 EOF
+else
+  echo "🔁 Configuration de la réplication Master <-> Master sans GTID (méthode traditionnelle)..."
+  
+  # Obtenir les positions des logs binaires
+  MYSQL1_STATUS=$(mysql -h mysql1 -uroot -proot -e "SHOW MASTER STATUS\G")
+  MYSQL1_FILE=$(echo "$MYSQL1_STATUS" | grep "File:" | awk '{print $2}')
+  MYSQL1_POS=$(echo "$MYSQL1_STATUS" | grep "Position:" | awk '{print $2}')
+  
+  MYSQL2_STATUS=$(mysql -h mysql2 -uroot -proot -e "SHOW MASTER STATUS\G")
+  MYSQL2_FILE=$(echo "$MYSQL2_STATUS" | grep "File:" | awk '{print $2}')
+  MYSQL2_POS=$(echo "$MYSQL2_STATUS" | grep "Position:" | awk '{print $2}')
+  
+  echo "MySQL1 Master Status: File=$MYSQL1_FILE, Position=$MYSQL1_POS"
+  echo "MySQL2 Master Status: File=$MYSQL2_FILE, Position=$MYSQL2_POS"
+  
+  # Configuration de mysql1 comme esclave de mysql2
+  mysql -h mysql1 -uroot -proot <<EOF
+STOP SLAVE;
+CHANGE MASTER TO 
+  MASTER_HOST='mysql2',
+  MASTER_USER='repl',
+  MASTER_PASSWORD='replpass',
+  MASTER_LOG_FILE='$MYSQL2_FILE',
+  MASTER_LOG_POS=$MYSQL2_POS;
+START SLAVE;
+EOF
+
+  # Configuration de mysql2 comme esclave de mysql1
+  mysql -h mysql2 -uroot -proot <<EOF
+STOP SLAVE;
+CHANGE MASTER TO 
+  MASTER_HOST='mysql1',
+  MASTER_USER='repl',
+  MASTER_PASSWORD='replpass',
+  MASTER_LOG_FILE='$MYSQL1_FILE',
+  MASTER_LOG_POS=$MYSQL1_POS;
+START SLAVE;
+EOF
+fi
 
 echo "✅ Vérification de la réplication..."
 mysql -h mysql1 -uroot -proot -e "SHOW SLAVE STATUS\G" | grep Running || true

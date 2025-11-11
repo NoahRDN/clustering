@@ -1,3 +1,0 @@
-- erreur de lancement du projet avec docker lors du lancement dans un autre pc
-- rendre un peu plus présentable les pages à présenter
-- lors de l'ajout de serveur, verifier si certains information existe deja dans conf, si c'est le cas, signaler l'utilisateur que c'st le cas et la création devient impossible. 

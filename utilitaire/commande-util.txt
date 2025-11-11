@@ -15,7 +15,3 @@ docker ps -a
 
 docker rm -f haproxy mysql
 wsl chmod +x ./scripts/setup-replication.sh
-
-docker inspect web3 | Select-String -Pattern "ExposedPorts" -Context 0,5
-docker inspect -f "{{json .Config.ExposedPorts}}" web3
-

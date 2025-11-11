@@ -1,0 +1,2 @@
+- lors de la création de base de donnée, qu'en est il si on veux ajouter d'autre base de donnée à part Mysql
+- comprendre tous les informations possible a afficher (voir meme necessaire a afficher) dans la section verification etat

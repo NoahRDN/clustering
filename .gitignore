@@ -1,0 +1,2 @@
+# Ignore les fichiers runtime HAProxy
+haproxy-web/runtime/

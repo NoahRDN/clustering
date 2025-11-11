@@ -10,12 +10,15 @@ services:
       - "8404:8404"
     volumes:
       - ./haproxy-web/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
+      - ./haproxy-web/runtime:/var/run/haproxy
+      - ./haproxy-web/haproxy-entrypoint.sh:/docker-entrypoint-custom.sh:ro
     depends_on:
       - web1
       - web2
     networks:
       - public_net
       - private_net
+    command: ["/bin/bash", "/docker-entrypoint-custom.sh"]
 
   # ----------------------------
   # 🔹 HAProxy pour la base de données
@@ -68,9 +71,24 @@ services:
       - "8090:80"
     volumes:
       - ./web/web-dashboard:/var/www/html
+      - ./haproxy-web:/data/haproxy-web
+      - ./haproxy-db:/data/haproxy-db
+      - ./haproxy-web/runtime:/haproxy-runtime
     networks:
       - private_net
       - public_net
+    command: >
+      bash -c "docker-php-ext-install pdo pdo_mysql && apache2-foreground"
+
+  web3:
+    image: php:8.2-apache
+    container_name: web3
+    volumes:
+      - ./web/web3:/var/www/html
+    depends_on:
+      - haproxy-db
+    networks:
+      - private_net
     command: >
       bash -c "docker-php-ext-install pdo pdo_mysql && apache2-foreground"
 
@@ -102,6 +120,20 @@ services:
     volumes:
       - ./mysql/mysql2/my.cnf:/etc/mysql/conf.d/my.cnf
       - ./mysql/mysql2/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - private_net
+
+  mysql3:
+    image: mysql:8.0
+    container_name: mysql3
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: clustering
+      MYSQL_REPLICATION_USER: repl
+      MYSQL_REPLICATION_PASSWORD: replpass
+    volumes:
+      - ./mysql/mysql3/my.cnf:/etc/mysql/conf.d/my.cnf
+      - ./mysql/mysql3/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - private_net
 

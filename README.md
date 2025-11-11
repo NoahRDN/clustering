@@ -2,8 +2,8 @@
 
 | Poste | Rôle | Adresse IPv4 |
 |-------|------|--------------|
-| PC1   | Client + (temporairement) rôle de PC3 : `haproxy-db`, `web2`, `mysql2` | `192.168.1.219` |
-| PC2   | `haproxy-web`, `web1`, `mysql1` | `192.168.1.77` |
+| PC1   | Client + (temporairement) rôle de PC3 : `haproxy-db`, `web2`, `mysql2` | `172.20.10.4` |
+| PC2   | `haproxy-web`, `web1`, `mysql1` | `172.20.10.2` |
 | PC3   | (à venir) reprendra ce que PC1 héberge actuellement | `à définir` |
 
 L’objectif est que PC2 serve le site aux clients tandis que PC1 fait office de passerelle vers la base de données (HAProxy DB + MySQL2). Lorsque le vrai PC3 sera prêt, il suffira de mettre à jour les IP indiquées ci‑dessous.
@@ -36,7 +36,7 @@ Quand PC3 sera en place, copiez `.env.pc1-example` dessus, remplacez `WEB2_REMOT
 
 ## 2. Démarrer les services
 
-### Sur PC2 (192.168.1.77)
+### Sur PC2 (172.20.10.2)
 
 1. Charger l’environnement local :
    ```bash
@@ -49,7 +49,7 @@ Quand PC3 sera en place, copiez `.env.pc1-example` dessus, remplacez `WEB2_REMOT
    ```
 3. `haproxy-web` lit l’entrée `pc3-web2` dans `/etc/hosts` (définie via `extra_hosts`). Pour pointer vers le futur PC3, modifiez `WEB2_REMOTE_IP` puis redémarrez `haproxy-web`.
 
-### Sur PC1 (192.168.1.219, rôle PC3)
+### Sur PC1 (172.20.10.4, rôle PC3)
 
 1. Copier/adapter `.env.pc1-example`.
 2. Démarrer les services :
@@ -62,10 +62,10 @@ Quand PC3 sera en place, copiez `.env.pc1-example` dessus, remplacez `WEB2_REMOT
 
 ## 3. Accès et tests
 
-- Client (PC1 ou autre) → `http://192.168.1.77:8080` pour passer par `haproxy-web`.
+- Client (PC1 ou autre) → `http://172.20.10.2:8080` pour passer par `haproxy-web`.
 - HAProxy web → `web2` via `pc3-web2:8082` (défini dans `haproxy-web/haproxy.cfg`). Mettre à jour `WEB2_REMOTE_IP` avant de redémarrer `haproxy-web`.
 - Serveurs PHP → base via `DB_PROXY_HOST`/`DB_PROXY_PORT` (configurable, voir `web/web*/index-db.php`).
-- Vérifier la réplication : `docker compose logs replication-init` sur PC1, ou se connecter à MySQL via `mysql -h 192.168.1.219 -P 3307 -uroot -proot`.
+- Vérifier la réplication : `docker compose logs replication-init` sur PC1, ou se connecter à MySQL via `mysql -h 172.20.10.4 -P 3307 -uroot -proot`.
 
 ---
 

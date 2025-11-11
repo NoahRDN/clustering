@@ -94,3 +94,10 @@ problematique:
 - utilite de Dernier Check et son fonctionnement et aussi utilite  des actions et different contenu dans action de Dashboard
 - quels sont les differnet fonctionnemnt de celui ci : rafraichir, recharger HAProxy, Nettoyer config? 
 - qu'en est il si il y a aussi des base de donnée de different type qui est utiliser ? 
+
+=======================
+- tester la connection entre different pc
+- avoir une ou on peut faire fonctionner avec une seule pc et une autre ou on peut faire avec plusieurs pc 
+- preparer les differents scenario a présenter et finaliser en fonction de cela
+- revoir la forme pour que ca soit présentable 
+- préparer une compréhension pour les config

@@ -19,7 +19,7 @@ services:
       - public_net
       - private_net
     extra_hosts:
-      - "pc3-web2=${WEB2_REMOTE_IP:-192.168.1.219}"  # PC1 simule PC3 → remplacer par l'IP du vrai PC3 plus tard
+      - "pc3-web2=${WEB2_REMOTE_IP:-172.20.10.4}"  # PC1 simule PC3 → remplacer par l'IP du vrai PC3 plus tard
     command: ["/bin/bash", "/docker-entrypoint-custom.sh"]
 
   # ----------------------------

@@ -11,4 +11,4 @@ docker compose config (validation de la syntaxe et de la substitution des variab
 À faire ensuite
 
 Copier le modèle .env approprié sur chaque PC, ajuster les IP si besoin, puis lancer docker compose up avec les services indiqués dans le README.
-Lorsque le vrai PC3 sera prêt, mettre à jour WEB2_REMOTE_IP, DB_PROXY_HOST et MYSQL1_REMOTE_IP dans les .env, redémarrer haproxy-web/haproxy-db, puis arrêter les services correspondants sur PC1.
+Lorsque le vrai PC3 sera prêt, mettre à jour WEB2_REMOTE_IP, DB_PROXY_HOST et MYSQL1_REMOTE_IP dans les .env, redémarrer haproxy-web/haproxy-db, puis arrêter les services correspondants sur PC1.N

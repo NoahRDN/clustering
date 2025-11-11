@@ -16,6 +16,15 @@ $webFormData = [
     'health_check' => true,
 ];
 
+$dbFormMode = 'create';
+$dbFormData = [
+    'name'         => '',
+    'host'         => '',
+    'port'         => '3306',
+    'role'         => '',
+    'gtid'         => true,
+];
+
 $editWebName = isset($_GET['edit_web']) ? trim($_GET['edit_web']) : '';
 if ($editWebName !== '') {
     $current = findWebServer($webServers, $editWebName);
@@ -28,6 +37,21 @@ if ($editWebName !== '') {
         $webFormData['health_check'] = $current['health_check'];
     } else {
         $messages[] = ['type' => 'warning', 'text' => "Serveur {$editWebName} introuvable dans la configuration."];
+    }
+}
+
+$editDbName = isset($_GET['edit_db']) ? trim($_GET['edit_db']) : '';
+if ($editDbName !== '') {
+    $currentDb = findDatabaseServer($dbServers, $editDbName);
+    if ($currentDb) {
+        $dbFormMode             = 'update';
+        $dbFormData['name']     = $currentDb['name'];
+        $dbFormData['host']     = $currentDb['ip'];
+        $dbFormData['port']     = $currentDb['port'] ?: '3306';
+        $dbFormData['role']     = $currentDb['role_raw'] ?? $currentDb['role'];
+        $dbFormData['gtid']     = $currentDb['gtid_bool'] ?? true;
+    } else {
+        $messages[] = ['type' => 'warning', 'text' => "Instance {$editDbName} introuvable dans la configuration."];
     }
 }
 ?>
@@ -313,39 +337,44 @@ if ($editWebName !== '') {
         </section>
 
         <!-- <section id="db-form">
-            <h2>Ajouter une base de données</h2>
-            <form class="inline" method="post" action="actions.php#db-form">
+            <h2><?= $dbFormMode === 'update' ? 'Modifier une base de données' : 'Ajouter une base de données' ?></h2>
+            <form class="inline" method="post" action="db-actions.php#db-form">
                 <input type="hidden" name="form_type" value="add_db">
+                <input type="hidden" name="operation" value="<?= $dbFormMode ?>">
+                <input type="hidden" name="original_name" value="<?= htmlspecialchars($dbFormMode === 'update' ? $dbFormData['name'] : '') ?>">
                 <div class="form-field">
                     <label>Nom du serveur</label>
-                    <input type="text" name="name" placeholder="mysql3" required>
+                    <input type="text" name="name" value="<?= htmlspecialchars($dbFormData['name']) ?>" placeholder="mysql3" required>
                 </div>
                 <div class="form-field">
                     <label>Adresse IP / Nom d’hôte</label>
-                    <input type="text" name="host" placeholder="172.18.0.11" required>
+                    <input type="text" name="host" value="<?= htmlspecialchars($dbFormData['host']) ?>" placeholder="172.18.0.11" required>
                 </div>
                 <div class="form-field">
                     <label>Port</label>
-                    <input type="number" name="port" placeholder="3306" min="1" max="65535" required>
+                    <input type="number" name="port" value="<?= htmlspecialchars($dbFormData['port']) ?>" min="1" max="65535" required>
                 </div>
                 <div class="form-field">
                     <label>Rôle</label>
                     <select name="role" required>
-                        <option value="" disabled selected>Choisir</option>
-                        <option value="Master">Master</option>
-                        <option value="Replica">Replica</option>
-                        <option value="Master-Master">Master-Master</option>
+                        <option value="" disabled <?= $dbFormMode === 'create' ? 'selected' : '' ?>>Choisir</option>
+                        <?php foreach (['Master', 'Replica', 'Master-Master'] as $role): ?>
+                            <option value="<?= $role ?>" <?= $dbFormData['role'] === $role ? 'selected' : '' ?>><?= $role ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="form-field">
                     <label>&nbsp;</label>
                     <label style="font-size:13px; display:flex; align-items:center; gap:8px;">
-                        <input type="checkbox" name="gtid" value="1" checked>
+                        <input type="checkbox" name="gtid" value="1" <?= $dbFormData['gtid'] ? 'checked' : '' ?>>
                         GTID activé
                     </label>
                 </div>
                 <div class="form-actions">
-                    <button type="submit" class="primary">Ajouter</button>
+                    <button type="submit" class="primary"><?= $dbFormMode === 'update' ? 'Mettre à jour' : 'Ajouter' ?></button>
+                    <?php if ($dbFormMode === 'update'): ?>
+                        <a href="index.php#db-form">Annuler la modification</a>
+                    <?php endif; ?>
                 </div>
             </form>
         </section> -->
@@ -371,6 +400,8 @@ if ($editWebName !== '') {
                             $dbEndpoint .= ':' . htmlspecialchars($db['port']);
                         }
                         $dbStatusClass = strtolower($db['status']) === 'ok' ? 'ok' : 'down';
+                        $dbToggleState = $db['disabled'] ? 'enable' : 'disable';
+                        $dbToggleLabel = $db['disabled'] ? 'Réactiver' : 'Désactiver';
                     ?>
                     <tr>
                         <td><?= htmlspecialchars($db['name']) ?></td>
@@ -380,11 +411,32 @@ if ($editWebName !== '') {
                         <td><?= htmlspecialchars($db['last_check']) ?></td>
                         <td>
                             <div class="row-actions">
-                                <button type="button">Modifier</button>
-                                <button type="button">Supprimer</button>
-                                <button type="button">Rafraîchir état</button>
-                                <button type="button">Redémarrer</button>
-                                <button type="button">Désactiver</button>
+                                <!-- <a href="?edit_db=<?= urlencode($db['name']) ?>#db-form">Modifier</a> -->
+                                <!-- <form method="post" action="db-actions.php">
+                                    <input type="hidden" name="form_type" value="db_action">
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="server" value="<?= htmlspecialchars($db['name']) ?>">
+                                    <button type="submit" onclick="return confirm('Supprimer <?= htmlspecialchars($db['name']) ?> ?')">Supprimer</button>
+                                </form>
+                                <form method="post" action="db-actions.php">
+                                    <input type="hidden" name="form_type" value="db_action">
+                                    <input type="hidden" name="action" value="refresh">
+                                    <input type="hidden" name="server" value="<?= htmlspecialchars($db['name']) ?>">
+                                    <button type="submit">Rafraîchir état</button>
+                                </form> -->
+                                <form method="post" action="db-actions.php">
+                                    <input type="hidden" name="form_type" value="db_action">
+                                    <input type="hidden" name="action" value="restart">
+                                    <input type="hidden" name="server" value="<?= htmlspecialchars($db['name']) ?>">
+                                    <button type="submit">Redémarrer</button>
+                                </form>
+                                <form method="post" action="db-actions.php">
+                                    <input type="hidden" name="form_type" value="db_action">
+                                    <input type="hidden" name="action" value="toggle">
+                                    <input type="hidden" name="target_state" value="<?= $dbToggleState ?>">
+                                    <input type="hidden" name="server" value="<?= htmlspecialchars($db['name']) ?>">
+                                    <button type="submit"><?= $dbToggleLabel ?></button>
+                                </form>
                             </div>
                         </td>
                     </tr>

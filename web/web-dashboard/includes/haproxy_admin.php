@@ -15,12 +15,18 @@ function buildDashboardContext(): array
             '/data/haproxy-db/haproxy.cfg',
             $projectRoot . '/haproxy-db/haproxy.cfg'
         ]),
-        'runtime_socket'  => resolveFirstExisting([
+        'web_runtime_socket' => resolveFirstExisting([
             '/haproxy-runtime/admin.sock',
             '/var/run/haproxy/admin.sock',
             $projectRoot . '/haproxy-web/runtime/admin.sock'
         ]),
-        'reload_flag'     => '/haproxy-runtime/reload.flag',
+        'db_runtime_socket' => resolveFirstExisting([
+            '/haproxy-db-runtime/admin.sock',
+            '/var/run/haproxy/admin.sock',
+            $projectRoot . '/haproxy-db/runtime/admin.sock'
+        ]),
+        'web_reload_flag' => '/haproxy-runtime/reload.flag',
+        'db_reload_flag'  => '/haproxy-db-runtime/reload.flag',
     ];
 }
 
@@ -120,7 +126,7 @@ function handleAddWeb(array $ctx, array $data): void
         $updated = updateWebServerEntry($configPath, $payload, $originalName);
         if ($updated) {
             addFlash('success', "Serveur web {$originalName} mis à jour.");
-            requestHaProxyReload($ctx);
+            requestHaProxyReload($ctx['web_reload_flag'] ?? null, 'HAProxy Web');
         } else {
             addFlash('error', "Impossible de mettre à jour {$originalName} (introuvable).");
         }
@@ -139,7 +145,7 @@ function handleAddWeb(array $ctx, array $data): void
     $line = implode(' ', $lineParts);
     if (insertServerLine($configPath, WEB_BACKEND, $line)) {
         addFlash('success', "Serveur web {$name} ajouté dans la configuration.");
-        requestHaProxyReload($ctx);
+        requestHaProxyReload($ctx['web_reload_flag'] ?? null, 'HAProxy Web');
     } else {
         addFlash('error', "Impossible d'ajouter {$name} (backend introuvable ?).");
     }
@@ -164,23 +170,23 @@ function handleWebAction(array $ctx, array $data): void
     switch ($action) {
         case 'delete':
             if (removeServerEntry($configPath, WEB_BACKEND, $server)) {
-                requestHaProxyReload($ctx);
-                runtimeCommand($ctx, "disable server " . WEB_BACKEND . "/{$server}");
+                requestHaProxyReload($ctx['web_reload_flag'] ?? null, 'HAProxy Web');
+                runtimeCommand($ctx['web_runtime_socket'] ?? null, "disable server " . WEB_BACKEND . "/{$server}");
                 addFlash('success', "Serveur {$server} retiré du backend.");
             } else {
                 addFlash('error', "Impossible de retirer {$server} (introuvable).");
             }
             break;
         case 'refresh':
-            if (runtimeCommand($ctx, "show servers state " . WEB_BACKEND)) {
+            if (runtimeCommand($ctx['web_runtime_socket'] ?? null, "show servers state " . WEB_BACKEND)) {
                 addFlash('success', "Statut de {$server} rafraîchi (via socket runtime).");
             } else {
                 addFlash('warning', "Impossible d'interroger HAProxy runtime. Pensez à recharger manuellement.");
             }
             break;
         case 'restart':
-            $disabled = runtimeCommand($ctx, "disable server " . WEB_BACKEND . "/{$server}");
-            $enabled  = runtimeCommand($ctx, "enable server " . WEB_BACKEND . "/{$server}");
+            $disabled = runtimeCommand($ctx['web_runtime_socket'] ?? null, "disable server " . WEB_BACKEND . "/{$server}");
+            $enabled  = runtimeCommand($ctx['web_runtime_socket'] ?? null, "enable server " . WEB_BACKEND . "/{$server}");
             if ($disabled && $enabled) {
                 addFlash('success', "Requête de redémarrage envoyée pour {$server}.");
             } else {
@@ -192,7 +198,7 @@ function handleWebAction(array $ctx, array $data): void
             $disable  = $target === 'disable';
             $updated  = setServerDisabled($configPath, $server, $disable);
             if ($updated) {
-                $runtimeOk = runtimeCommand($ctx, ($disable ? 'disable' : 'enable') . " server " . WEB_BACKEND . "/{$server}");
+                $runtimeOk = runtimeCommand($ctx['web_runtime_socket'] ?? null, ($disable ? 'disable' : 'enable') . " server " . WEB_BACKEND . "/{$server}");
                 if (!$runtimeOk) {
                     addFlash('warning', "Configuration mise à jour mais impossible de contacter HAProxy runtime. Relance requise.");
                 } else {
@@ -215,11 +221,13 @@ function handleDatabaseForm(array $ctx, array $data): void
         return;
     }
 
-    $name = trim($data['name'] ?? '');
-    $host = trim($data['host'] ?? '');
-    $port = filter_var($data['port'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 65535]]);
-    $role = trim($data['role'] ?? '');
-    $gtid = !empty($data['gtid']);
+    $operation    = $data['operation'] ?? 'create';
+    $originalName = trim($data['original_name'] ?? '');
+    $name         = trim($data['name'] ?? '');
+    $host         = trim($data['host'] ?? '');
+    $port         = filter_var($data['port'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 65535]]);
+    $role         = trim($data['role'] ?? '');
+    $gtid         = !empty($data['gtid']);
 
     $errors = [];
     if (!validateIdentifier($name)) {
@@ -234,12 +242,18 @@ function handleDatabaseForm(array $ctx, array $data): void
     if (!validateDatabaseRole($role)) {
         $errors[] = 'Rôle invalide (Master, Replica ou Master-Master).';
     }
+    if ($operation === 'update' && $originalName === '') {
+        $errors[] = 'Instance d’origine manquante pour la mise à jour.';
+    }
 
     $existing = parseDatabaseServers($configPath);
     foreach ($existing as $server) {
         if (strcasecmp($server['name'], $name) === 0) {
-            $errors[] = 'Un serveur de base de données porte déjà ce nom.';
-            break;
+            $isSame = strcasecmp($server['name'], $originalName) === 0;
+            if ($operation === 'create' || ($operation === 'update' && !$isSame)) {
+                $errors[] = 'Une instance de base de données porte déjà ce nom.';
+                break;
+            }
         }
     }
 
@@ -248,39 +262,118 @@ function handleDatabaseForm(array $ctx, array $data): void
         return;
     }
 
-    $lineParts = ['server', $name, sprintf('%s:%d', $host, $port), 'check'];
-    $meta      = ['role=' . $role, 'gtid=' . ($gtid ? 'on' : 'off')];
-    $line      = implode(' ', $lineParts) . ' # ' . implode(' ', $meta);
+    $payload = [
+        'name'          => $name,
+        'host'          => $host,
+        'port'          => (int) $port,
+        'role'          => $role,
+        'gtid'          => $gtid,
+        'health_check'  => true,
+    ];
+
+    if ($operation === 'update') {
+        $updated = updateDatabaseServerEntry($configPath, $payload, $originalName);
+        if ($updated) {
+            addFlash('success', "Instance {$originalName} mise à jour.");
+            requestHaProxyReload($ctx['db_reload_flag'] ?? null, 'HAProxy DB');
+        } else {
+            addFlash('error', "Impossible de modifier {$originalName} (introuvable).");
+        }
+        return;
+    }
+
+    $line = buildDatabaseServerLine($payload);
 
     if (insertServerLine($configPath, DB_BACKEND, $line)) {
         addFlash('success', "Base de données {$name} ajoutée dans HAProxy.");
+        requestHaProxyReload($ctx['db_reload_flag'] ?? null, 'HAProxy DB');
     } else {
         addFlash('error', "Impossible d'ajouter {$name} (backend DB introuvable ?).");
     }
 }
 
-function requestHaProxyReload(array $ctx): void
+function handleDatabaseAction(array $ctx, array $data): void
 {
-    $flag = $ctx['reload_flag'] ?? null;
+    $configPath = $ctx['db_cfg'] ?? null;
+    if (!$configPath) {
+        addFlash('error', 'Fichier de configuration HAProxy (DB) introuvable.');
+        return;
+    }
+
+    $action = $data['action'] ?? '';
+    $server = trim($data['server'] ?? '');
+
+    if (!validateIdentifier($server)) {
+        addFlash('error', 'Instance cible invalide.');
+        return;
+    }
+
+    switch ($action) {
+        case 'delete':
+            if (removeServerEntry($configPath, DB_BACKEND, $server)) {
+                requestHaProxyReload($ctx['db_reload_flag'] ?? null, 'HAProxy DB');
+                runtimeCommand($ctx['db_runtime_socket'] ?? null, "disable server " . DB_BACKEND . "/{$server}");
+                addFlash('success', "Instance {$server} supprimée.");
+            } else {
+                addFlash('error', "Impossible de supprimer {$server} (introuvable).");
+            }
+            break;
+        case 'refresh':
+            if (runtimeCommand($ctx['db_runtime_socket'] ?? null, "show servers state " . DB_BACKEND)) {
+                addFlash('success', "Statut de {$server} rafraîchi.");
+            } else {
+                addFlash('warning', "Impossible de contacter HAProxy DB (socket runtime).");
+            }
+            break;
+        case 'restart':
+            $disabled = runtimeCommand($ctx['db_runtime_socket'] ?? null, "disable server " . DB_BACKEND . "/{$server}");
+            $enabled  = runtimeCommand($ctx['db_runtime_socket'] ?? null, "enable server " . DB_BACKEND . "/{$server}");
+            if ($disabled && $enabled) {
+                addFlash('success', "Redémarrage logique demandé pour {$server}.");
+            } else {
+                addFlash('warning', "Impossible de redémarrer {$server} via la socket runtime.");
+            }
+            break;
+        case 'toggle':
+            $target  = $data['target_state'] ?? 'disable';
+            $disable = $target === 'disable';
+            $updated = setDatabaseServerDisabled($configPath, $server, $disable);
+            if ($updated) {
+                $runtimeOk = runtimeCommand($ctx['db_runtime_socket'] ?? null, ($disable ? 'disable' : 'enable') . " server " . DB_BACKEND . "/{$server}");
+                if (!$runtimeOk) {
+                    addFlash('warning', "Configuration DB mise à jour mais impossible de contacter HAProxy (socket).");
+                } else {
+                    addFlash('success', $disable ? "{$server} désactivé." : "{$server} réactivé.");
+                }
+            } else {
+                addFlash('error', "Impossible de changer l'état de {$server}.");
+            }
+            break;
+        default:
+            addFlash('error', 'Action DB inconnue.');
+    }
+}
+
+function requestHaProxyReload(?string $flag, string $label): void
+{
     if (!$flag) {
-        addFlash('warning', 'Impossible de signaler le rechargement HAProxy (chemin manquant).');
+        addFlash('warning', "Impossible de signaler le rechargement {$label} (chemin manquant).");
         return;
     }
 
     $dir = dirname($flag);
     if (!is_dir($dir) || !is_writable($dir)) {
-        addFlash('warning', 'Impossible de signaler le rechargement HAProxy (répertoire inaccessible).');
+        addFlash('warning', "Impossible de signaler le rechargement {$label} (répertoire inaccessible).");
         return;
     }
 
     if (@file_put_contents($flag, "reload\n") === false) {
-        addFlash('warning', 'Rechargement HAProxy non déclenché (écriture impossible).');
+        addFlash('warning', "Rechargement {$label} non déclenché (écriture impossible).");
     }
 }
 
-function runtimeCommand(array $ctx, string $command): bool
+function runtimeCommand(?string $socket, string $command): bool
 {
-    $socket = $ctx['runtime_socket'] ?? null;
     if (!$socket || !file_exists($socket)) {
         return false;
     }
@@ -460,6 +553,57 @@ function buildWebServerLine(array $definition): string
     return implode(' ', $parts);
 }
 
+function updateDatabaseServerEntry(string $path, array $payload, string $originalName): bool
+{
+    return alterServerLine($path, DB_BACKEND, $originalName, function (array $definition, string $indent) use ($payload) {
+        $definition['name']   = $payload['name'];
+        $definition['host']   = $payload['host'];
+        $definition['port']   = (string) $payload['port'];
+        $definition['role']   = $payload['role'];
+        $definition['gtid']   = $payload['gtid'];
+        $definition['disabled'] = !empty($definition['disabled']);
+        $definition['health_check'] = true;
+        $line = buildDatabaseServerLine($definition);
+        return $indent . $line;
+    });
+}
+
+function setDatabaseServerDisabled(string $path, string $name, bool $disable): bool
+{
+    return alterServerLine($path, DB_BACKEND, $name, function (array $definition, string $indent) use ($disable) {
+        $definition['disabled'] = $disable;
+        $line = buildDatabaseServerLine($definition);
+        return $indent . $line;
+    });
+}
+
+function buildDatabaseServerLine(array $definition): string
+{
+    $parts = [
+        'server',
+        $definition['name'],
+        sprintf('%s:%s', $definition['host'], $definition['port'])
+    ];
+    if (!empty($definition['health_check'])) {
+        $parts[] = 'check';
+    }
+    if (!empty($definition['disabled'])) {
+        $parts[] = 'disabled';
+    }
+    $meta = [];
+    if (!empty($definition['role'])) {
+        $meta[] = 'role=' . $definition['role'];
+    }
+    if (isset($definition['gtid'])) {
+        $meta[] = 'gtid=' . ($definition['gtid'] ? 'on' : 'off');
+    }
+    $line = implode(' ', $parts);
+    if ($meta) {
+        $line .= ' # ' . implode(' ', $meta);
+    }
+    return $line;
+}
+
 function writeConfig(string $path, array $lines): bool
 {
     $content = implode(PHP_EOL, $lines) . PHP_EOL;
@@ -485,6 +629,36 @@ function parseServerDefinition(string $line): ?array
         'cookie'       => findTokenValue($parts, 'cookie') ?? '',
         'health_check' => hasFlag($parts, 'check'),
         'disabled'     => hasFlag($parts, 'disabled'),
+    ];
+}
+
+function parseDatabaseServerDefinition(string $line): ?array
+{
+    [$content, $comment] = splitComment($line);
+    $content = trim($content);
+    if ($content === '' || stripos($content, 'server') !== 0) {
+        return null;
+    }
+    $parts = preg_split('/\s+/', $content);
+    if (count($parts) < 3) {
+        return null;
+    }
+    [$host, $port] = explodeAddress($parts[2]);
+    $meta      = parseMetaComment($comment);
+    $roleRaw   = $meta['role'] ?? 'GTID Sync';
+    $roleValue = in_array($roleRaw, ['Master', 'Replica', 'Master-Master'], true) ? $roleRaw : 'Master';
+    $gtid      = strtolower($meta['gtid'] ?? 'on');
+
+    return [
+        'name'          => $parts[1],
+        'host'          => $host,
+        'port'          => $port,
+        'role'          => $roleValue,
+        'role_label'    => $roleRaw,
+        'gtid'          => $gtid === 'on',
+        'gtid_label'    => $gtid,
+        'health_check'  => hasFlag($parts, 'check'),
+        'disabled'      => hasFlag($parts, 'disabled'),
     ];
 }
 
@@ -526,21 +700,22 @@ function parseDatabaseServers(?string $path): array
 
     $servers = [];
     foreach ($lines as $line) {
-        [$content, $comment] = splitComment($line);
-        $parts = preg_split('/\s+/', trim($content));
-        if (count($parts) < 3) {
+        $definition = parseDatabaseServerDefinition($line);
+        if (!$definition) {
             continue;
         }
-        [$host, $port] = explodeAddress($parts[2]);
-        $meta          = parseMetaComment($comment);
-        $servers[]     = [
-            'name'       => $parts[1],
-            'ip'         => $host,
-            'port'       => $port,
-            'status'     => hasFlag($parts, 'disabled') ? 'DISABLED' : 'OK',
-            'role'       => $meta['role'] ?? 'GTID Sync',
-            'gtid'       => strtoupper($meta['gtid'] ?? 'ON'),
-            'last_check' => '—'
+        $servers[] = [
+            'name'        => $definition['name'],
+            'ip'          => $definition['host'],
+            'port'        => $definition['port'],
+            'status'      => $definition['disabled'] ? 'DISABLED' : 'OK',
+            'role'        => $definition['role_label'],
+            'role_raw'    => $definition['role'],
+            'gtid'        => strtoupper($definition['gtid_label']),
+            'gtid_bool'   => $definition['gtid'],
+            'disabled'    => $definition['disabled'],
+            'health_check'=> $definition['health_check'],
+            'last_check'  => '—',
         ];
     }
 
@@ -668,12 +843,22 @@ function defaultWebServers(): array
 function defaultDatabaseServers(): array
 {
     return [
-        ['name' => 'mysql1', 'ip' => '192.168.1.10', 'port' => '3306', 'status' => 'OK', 'role' => 'GTID Sync', 'gtid' => 'ON', 'last_check' => '—'],
-        ['name' => 'mysql2', 'ip' => '192.168.1.11', 'port' => '3306', 'status' => 'OK', 'role' => 'GTID Sync', 'gtid' => 'ON', 'last_check' => '—'],
+        ['name' => 'mysql1', 'ip' => '192.168.1.10', 'port' => '3306', 'status' => 'OK', 'role' => 'GTID Sync', 'role_raw' => 'Master', 'gtid' => 'ON', 'gtid_bool' => true, 'last_check' => '—', 'disabled' => false, 'health_check' => true],
+        ['name' => 'mysql2', 'ip' => '192.168.1.11', 'port' => '3306', 'status' => 'OK', 'role' => 'GTID Sync', 'role_raw' => 'Replica', 'gtid' => 'ON', 'gtid_bool' => true, 'last_check' => '—', 'disabled' => false, 'health_check' => true],
     ];
 }
 
 function findWebServer(array $servers, string $name): ?array
+{
+    foreach ($servers as $server) {
+        if (strcasecmp($server['name'], $name) === 0) {
+            return $server;
+        }
+    }
+    return null;
+}
+
+function findDatabaseServer(array $servers, string $name): ?array
 {
     foreach ($servers as $server) {
         if (strcasecmp($server['name'], $name) === 0) {

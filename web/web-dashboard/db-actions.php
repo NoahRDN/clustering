@@ -4,18 +4,17 @@ require __DIR__ . '/includes/haproxy_admin.php';
 
 $ctx      = buildDashboardContext();
 $formType = $_POST['form_type'] ?? '';
-$redirect = 'index.php';
+$redirect = 'index.php#db-form';
 
 switch ($formType) {
-    case 'add_web':
-        handleAddWeb($ctx, $_POST);
-        $redirect = 'index.php#web-form';
+    case 'add_db':
+        handleDatabaseForm($ctx, $_POST);
         break;
-    case 'web_action':
-        handleWebAction($ctx, $_POST);
+    case 'db_action':
+        handleDatabaseAction($ctx, $_POST);
         break;
     default:
-        addFlash('error', 'Formulaire inconnu.');
+        addFlash('error', 'Formulaire DB inconnu.');
         break;
 }
 

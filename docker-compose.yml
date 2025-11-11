@@ -31,11 +31,14 @@ services:
       - "8405:8405"      # page de stats DB
     volumes:
       - ./haproxy-db/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
+      - ./haproxy-db/runtime:/var/run/haproxy
+      - ./haproxy-db/haproxy-entrypoint.sh:/docker-entrypoint-custom.sh:ro
     depends_on:
       - mysql1
       - mysql2
     networks:
       - private_net
+    command: ["/bin/bash", "/docker-entrypoint-custom.sh"]
 
   # ----------------------------
   # 🔹 Serveurs web (PHP + Apache)
@@ -74,6 +77,7 @@ services:
       - ./haproxy-web:/data/haproxy-web
       - ./haproxy-db:/data/haproxy-db
       - ./haproxy-web/runtime:/haproxy-runtime
+      - ./haproxy-db/runtime:/haproxy-db-runtime
     networks:
       - private_net
       - public_net

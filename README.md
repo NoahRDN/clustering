@@ -10,6 +10,25 @@ L’objectif est que PC2 serve le site aux clients tandis que PC1 fait office de
 
 ---
 
+## Configuration HAProxy centralisée
+
+- Le répertoire `shared-config/` contient **la seule source de vérité** pour les fichiers `haproxy-*.cfg`.
+- Le service `config-service` (conteneur Nginx) expose ces fichiers sur `http://<PC1>:8088/`.
+- Les conteneurs `haproxy-web` et `haproxy-db` téléchargent automatiquement leur configuration depuis cette URL au démarrage et à chaque reload (fichier `runtime/reload.flag`).
+
+👉 Pour mettre à jour la config :
+1. Modifier `shared-config/haproxy-web.cfg` ou `shared-config/haproxy-db.cfg`.
+2. (Optionnel) vérifier depuis un navigateur `http://172.20.10.4:8088/haproxy-web.cfg`.
+3. Sur le ou les PC concernés, déclencher un reload :
+   ```bash
+   touch haproxy-web/runtime/reload.flag   # pour HAProxy web
+   touch haproxy-db/runtime/reload.flag   # pour HAProxy DB
+   ```
+
+Les anciens fichiers `haproxy-web/haproxy.cfg` et `haproxy-db/haproxy.cfg` restent présents uniquement comme **configuration de secours** si le téléchargement échoue.
+
+---
+
 ## 1. Préparer les fichiers d’environnement
 
 Chaque poste doit avoir son propre fichier `.env` (non versionné) à partir des modèles fournis :
@@ -26,6 +45,7 @@ Mettez à jour les valeurs suivantes si les IP changent :
 
 | Variable | Fichier | Description |
 |----------|---------|-------------|
+| `HAPROXY_WEB_CONFIG_URL`, `HAPROXY_DB_CONFIG_URL` | PC1 & PC2 | URL HTTP du service `config-service` (ex : `http://172.20.10.4:8088/haproxy-web.cfg`) |
 | `WEB2_REMOTE_IP` | PC2 | IP du poste qui héberge `web2` (PC1 maintenant, PC3 plus tard) |
 | `DB_PROXY_HOST` | PC2 | Adresse à laquelle les serveurs web contactent `haproxy-db` |
 | `MYSQL1_REMOTE_IP`, `MYSQL1_PORT` | PC1 | Adresse/port publiés de `mysql1` sur PC2 |
@@ -48,15 +68,20 @@ Quand PC3 sera en place, copiez `.env.pc1-example` dessus, remplacez `WEB2_REMOT
    docker compose up -d haproxy-web web1 mysql1
    ```
 3. `haproxy-web` lit l’entrée `pc3-web2` dans `/etc/hosts` (définie via `extra_hosts`). Pour pointer vers le futur PC3, modifiez `WEB2_REMOTE_IP` puis redémarrez `haproxy-web`.
+4. Assure-toi que `HAPROXY_WEB_CONFIG_URL` pointe bien vers `http://172.20.10.4:8088/haproxy-web.cfg` (config-service hébergé sur PC1).
 
 ### Sur PC1 (172.20.10.4, rôle PC3)
 
 1. Copier/adapter `.env.pc1-example`.
-2. Démarrer les services :
+2. Démarrer d’abord le service de configuration partagé :
+   ```bash
+   docker compose up -d config-service
+   ```
+3. Démarrer les services applicatifs :
    ```bash
    docker compose up -d haproxy-db web2 mysql2 replication-init
    ```
-3. `haproxy-db` contacte `mysql1` au port publié `33061` sur PC2 (`haproxy-db/haproxy.cfg`, ligne `server mysql1 pc2-mysql1:33061`). Changez simplement `MYSQL1_REMOTE_IP` quand le poste change.
+4. `haproxy-db` contacte `mysql1` au port publié `33061` sur PC2 (`shared-config/haproxy-db.cfg`, ligne `server mysql1 pc2-mysql1:33061`). Changez simplement `MYSQL1_REMOTE_IP` quand le poste change.
 
 ---
 
@@ -66,6 +91,7 @@ Quand PC3 sera en place, copiez `.env.pc1-example` dessus, remplacez `WEB2_REMOT
 - HAProxy web → `web2` via `pc3-web2:8082` (défini dans `haproxy-web/haproxy.cfg`). Mettre à jour `WEB2_REMOTE_IP` avant de redémarrer `haproxy-web`.
 - Serveurs PHP → base via `DB_PROXY_HOST`/`DB_PROXY_PORT` (configurable, voir `web/web*/index-db.php`).
 - Vérifier la réplication : `docker compose logs replication-init` sur PC1, ou se connecter à MySQL via `mysql -h 172.20.10.4 -P 3307 -uroot -proot`.
+- Vérifier la config centralisée : `curl http://172.20.10.4:8088/haproxy-web.cfg`.
 
 ---
 
@@ -78,8 +104,8 @@ Quand PC3 sera en place, copiez `.env.pc1-example` dessus, remplacez `WEB2_REMOT
 
 Ces indications se retrouvent directement dans les fichiers :
 
-- `haproxy-web/haproxy.cfg` → ligne `server web2 pc3-web2:8082`.
-- `haproxy-db/haproxy.cfg` → ligne `server mysql1 pc2-mysql1:33061`.
+- `shared-config/haproxy-web.cfg` → ligne `server web2 pc3-web2:8082`.
+- `shared-config/haproxy-db.cfg` → ligne `server mysql1 pc2-mysql1:33061`.
 - `.env.pc*-example` → valeurs à mettre à jour lors du déplacement vers PC3.
 
 Ainsi, aucune modification de code supplémentaire n’est nécessaire le jour du basculement : seules les IP dans `.env` (et éventuellement l’entrée `extra_hosts`) sont à adapter.

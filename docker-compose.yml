@@ -1,5 +1,19 @@
 services:
   # ----------------------------
+  # 🔹 Service HTTP pour la configuration partagée
+  # ----------------------------
+  config-service:
+    image: nginx:1.27
+    container_name: config-service
+    ports:
+      - "${CONFIG_SERVICE_PORT:-8088}:80"
+    volumes:
+      - ./shared-config:/usr/share/nginx/html:ro
+    networks:
+      - private_net
+      - public_net
+
+  # ----------------------------
   # 🔹 HAProxy pour les serveurs Web
   # ----------------------------
   haproxy-web:
@@ -20,6 +34,8 @@ services:
       - private_net
     extra_hosts:
       - "pc3-web2=${WEB2_REMOTE_IP:-172.20.10.4}"  # PC1 simule PC3 → remplacer par l'IP du vrai PC3 plus tard
+    environment:
+      HAPROXY_CONFIG_URL: ${HAPROXY_WEB_CONFIG_URL:-http://config-service/haproxy-web.cfg}
     command: ["/bin/bash", "/docker-entrypoint-custom.sh"]
 
   # ----------------------------
@@ -41,7 +57,9 @@ services:
     networks:
       - private_net
     extra_hosts:
-      - "pc2-mysql1=${MYSQL1_REMOTE_IP:-192.168.1.77}" # IP de mysql1 (hébergé sur PC2)
+      - "pc2-mysql1=${MYSQL1_REMOTE_IP:-172.20.10.2}" # IP de mysql1 (hébergé sur PC2)
+    environment:
+      HAPROXY_CONFIG_URL: ${HAPROXY_DB_CONFIG_URL:-http://config-service/haproxy-db.cfg}
     command: ["/bin/bash", "/docker-entrypoint-custom.sh"]
 
   # ----------------------------
@@ -172,7 +190,7 @@ services:
     volumes:
       - ./scripts:/scripts
     extra_hosts:
-      - "pc2-mysql1=${MYSQL1_REMOTE_IP:-192.168.1.77}"
+      - "pc2-mysql1=${MYSQL1_REMOTE_IP:-172.20.10.2}"
     environment:
       MYSQL1_HOST: ${MYSQL1_HOST:-mysql1}
       MYSQL1_PORT: ${MYSQL1_PORT:-3306}

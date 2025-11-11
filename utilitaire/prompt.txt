@@ -1,0 +1,14 @@
+Résultats
+
+docker-compose.yml (lines 5-181) fait maintenant le lien inter-PC : haproxy-web résout pc3-web2 via WEB2_REMOTE_IP, web2 publie son port (WEB2_PUBLISHED_PORT), les serveurs PHP reçoivent DB_PROXY_HOST/PORT, mysql1 expose MYSQL1_PUBLISHED_PORT, et replication-init connaît les IP/ports via variables d’environnement + extra_hosts.
+haproxy-web/haproxy.cfg (lines 29-45) et haproxy-db/haproxy.cfg (lines 16-22) documentent explicitement où changer d’IP (pc3-web2 (line 8082) pour web2 distant, pc2-mysql1 (line 33061) pour mysql1 sur PC2) afin de préparer le basculement vers un vrai PC3.
+web/web1/index-db.php (lines 2-41) & web/web2/index-db.php (lines 2-41) lisent désormais l’hôte/port MySQL depuis l’environnement (par défaut haproxy-db (line 3307)), ce qui permet à PC2 de viser 192.168.1.219 aujourd’hui et d’ajuster plus tard sans retoucher le code.
+scripts/setup-replication.sh (lines 1-144) accepte MYSQL1_*/MYSQL2_* pour joindre les bases via IP publiées (ping, GRANT, GTID, tests inclus), ce qui rend l’automatisation fonctionnelle même lorsque les instances sont réparties sur plusieurs machines.
+Nouveaux gabarits .env.pc1-example et .env.pc2-example (lignes 1-20 et 1-19) + .gitignore incluent la marche à suivre pour créer un .env propre à chaque poste; le README (README.md (lines 1-85)) décrit en détail la procédure PC1↔PC2, les variables à modifier et la checklist pour migrer vers un PC3 dédié.
+Tests
+
+docker compose config (validation de la syntaxe et de la substitution des variables)
+À faire ensuite
+
+Copier le modèle .env approprié sur chaque PC, ajuster les IP si besoin, puis lancer docker compose up avec les services indiqués dans le README.
+Lorsque le vrai PC3 sera prêt, mettre à jour WEB2_REMOTE_IP, DB_PROXY_HOST et MYSQL1_REMOTE_IP dans les .env, redémarrer haproxy-web/haproxy-db, puis arrêter les services correspondants sur PC1.

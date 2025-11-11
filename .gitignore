@@ -1,3 +1,6 @@
 # Ignore les fichiers runtime HAProxy
 haproxy-web/runtime/
 haproxy-db/runtime/
+
+# Fichiers d'environnement locaux
+.env

@@ -61,6 +61,19 @@ services:
     command: >
       bash -c "docker-php-ext-install pdo pdo_mysql && apache2-foreground"
 
+  web-dashboard:
+    image: php:8.2-apache
+    container_name: web-dashboard
+    ports:
+      - "8090:80"
+    volumes:
+      - ./web/web-dashboard:/var/www/html
+    networks:
+      - private_net
+      - public_net
+    command: >
+      bash -c "docker-php-ext-install pdo pdo_mysql && apache2-foreground"
+
   # ----------------------------
   # 🔹 Deux bases de données MySQL (master-master)
   # ----------------------------

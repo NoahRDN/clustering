@@ -1,0 +1,2 @@
+- erreur de lancement du projet avec docker lors du lancement dans un autre pc
+- rendre un peu plus présentable les pages à présenter

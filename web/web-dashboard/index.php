@@ -488,7 +488,7 @@ if ($editDbName !== '') {
                         <td>
                             <div class="row-actions">
                                 <a href="?edit_db=<?= urlencode($db['name']) ?>#db-form">Modifier</a>
-                                <form method="post" action="db-actions.php">
+                                <!-- <form method="post" action="db-actions.php">
                                     <input type="hidden" name="form_type" value="db_action">
                                     <input type="hidden" name="action" value="delete">
                                     <input type="hidden" name="server" value="<?= htmlspecialchars($db['name']) ?>">
@@ -499,7 +499,7 @@ if ($editDbName !== '') {
                                     <input type="hidden" name="action" value="refresh">
                                     <input type="hidden" name="server" value="<?= htmlspecialchars($db['name']) ?>">
                                     <button type="submit">Rafraîchir état</button>
-                                </form>
+                                </form> -->
                                 <form method="post" action="db-actions.php">
                                     <input type="hidden" name="form_type" value="db_action">
                                     <input type="hidden" name="action" value="restart">

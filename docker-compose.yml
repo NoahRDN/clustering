@@ -78,7 +78,7 @@ services:
     volumes:
       - ./haproxy-web/runtime:/haproxy
     ports:
-      - "${RUNTIME_API_WEB_PORT:-9001}:8000"
+      - "${RUNTIME_API_WEB_PORT:-9101}:8000"
     networks:
       - private_net
       - public_net

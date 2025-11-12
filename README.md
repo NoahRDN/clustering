@@ -20,7 +20,7 @@ L’objectif est que PC2 serve le site aux clients tandis que PC1 fait office de
 1. Modifier `shared-config/haproxy-web.cfg` ou `shared-config/haproxy-db.cfg`.
 2. (Optionnel) vérifier depuis un navigateur `http://172.20.10.4:8088/haproxy-web.cfg`.
 3. Sur le ou les PC concernés, déclencher un reload :
-   - Via l’API REST (préféré) : `curl -X POST http://<pc>:9001/reload -d '{"token":"..."}'`.
+   - Via l’API REST (préféré) : `curl -X POST http://<pc>:9101/reload -d '{"token":"..."}'`.
    - En dernier recours (même machine uniquement) : `touch haproxy-web/runtime/reload.flag`.
 
 ## API de contrôle HAProxy (runtime-api-*)
@@ -32,7 +32,7 @@ Chaque HAProxy dispose d’un petit service REST (conteneurs `runtime-api-web` e
 Ces services :
 - tournent sur le même hôte que HAProxy (accès direct à `admin.sock` via volume) ;
 - sont protégés par un token (`WEB_RUNTIME_API_TOKEN`, `DB_RUNTIME_API_TOKEN`) ;
-- publient par défaut les ports `9001` (web) et `9002` (db), accessibles sur le réseau local (`http://172.20.10.2:9001`, `http://172.20.10.4:9002`, etc.).
+- publient par défaut les ports `9101` (web) et `9002` (db), accessibles sur le réseau local (`http://172.20.10.2:9101`, `http://172.20.10.4:9002`, etc.).
 
 Le dashboard consomme désormais ces API pour arrêter/redémarrer les serveurs, ce qui permet d’administrer HAProxy à distance même lorsqu’il tourne sur un autre PC.
 
@@ -58,7 +58,7 @@ Mettez à jour les valeurs suivantes si les IP changent :
 | `WEB2_REMOTE_IP` | PC2 | IP du poste qui héberge `web2` (PC1 maintenant, PC3 plus tard) |
 | `DB_PROXY_HOST` | PC2 | Adresse à laquelle les serveurs web contactent `haproxy-db` |
 | `MYSQL1_REMOTE_IP`, `MYSQL1_PORT` | PC1 | Adresse/port publiés de `mysql1` sur PC2 |
-| `WEB_RUNTIME_API_URL`, `DB_RUNTIME_API_URL` | PC1 & PC2 | URL REST des services runtime (ex : `http://172.20.10.2:9001`) |
+| `WEB_RUNTIME_API_URL`, `DB_RUNTIME_API_URL` | PC1 & PC2 | URL REST des services runtime (ex : `http://172.20.10.2:9101`) |
 | `WEB_RUNTIME_API_TOKEN`, `DB_RUNTIME_API_TOKEN` | PC1 & PC2 | Token partagé pour sécuriser les appels REST |
 
 Quand PC3 sera en place, copiez `.env.pc1-example` dessus, remplacez `WEB2_REMOTE_IP` et `DB_PROXY_HOST` par l’IP de PC3, puis n’exécutez plus `haproxy-db/web2/mysql2` sur PC1.
@@ -79,7 +79,7 @@ Quand PC3 sera en place, copiez `.env.pc1-example` dessus, remplacez `WEB2_REMOT
    docker compose up -d haproxy-web runtime-api-web web1 mysql1
    ```
 3. `haproxy-web` lit l’entrée `pc3-web2` dans `/etc/hosts` (définie via `extra_hosts`). Pour pointer vers le futur PC3, modifiez `WEB2_REMOTE_IP` puis redémarrez `haproxy-web`.
-4. L’API runtime Web est disponible sur `http://172.20.10.2:9001`.
+4. L’API runtime Web est disponible sur `http://172.20.10.2:9101`.
 4. Assure-toi que `HAPROXY_WEB_CONFIG_URL` pointe bien vers `http://172.20.10.4:8088/haproxy-web.cfg` (config-service hébergé sur PC1).
 
 ### Sur PC1 (172.20.10.4, rôle PC3)

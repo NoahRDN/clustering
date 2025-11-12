@@ -8,12 +8,12 @@ function buildDashboardContext(): array
     return [
         'project_root'    => $projectRoot,
         'web_cfg'         => resolveFirstExisting([
-            '/data/haproxy-web/haproxy.cfg',
-            $projectRoot . '/haproxy-web/haproxy.cfg'
+            '/data/shared-config/haproxy-web.cfg',
+            $projectRoot . '/shared-config/haproxy-web.cfg'
         ]),
         'db_cfg'          => resolveFirstExisting([
-            '/data/haproxy-db/haproxy.cfg',
-            $projectRoot . '/haproxy-db/haproxy.cfg'
+            '/data/shared-config/haproxy-db.cfg',
+            $projectRoot . '/shared-config/haproxy-db.cfg'
         ]),
         'web_runtime_socket' => resolveFirstExisting([
             '/haproxy-runtime/admin.sock',

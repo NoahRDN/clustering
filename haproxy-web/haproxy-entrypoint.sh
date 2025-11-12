@@ -1,12 +1,10 @@
 #!/bin/sh
 set -eu
 
-CONFIG_LOCAL="/usr/local/etc/haproxy/haproxy.cfg"
 PIDFILE="/var/run/haproxy/haproxy.pid"
 RUNTIME_DIR="/var/run/haproxy"
 FLAG_FILE="${RUNTIME_DIR}/reload.flag"
-CONFIG_REMOTE="${RUNTIME_DIR}/remote.cfg"
-ACTIVE_CONFIG="${CONFIG_LOCAL}"
+ACTIVE_CONFIG="${RUNTIME_DIR}/active.cfg"
 APT_READY=0
 
 mkdir -p "${RUNTIME_DIR}"
@@ -43,19 +41,19 @@ download_to_file() {
 
 fetch_remote_config() {
   if [ -z "${HAPROXY_CONFIG_URL:-}" ]; then
+    echo "[haproxy-entrypoint] HAPROXY_CONFIG_URL non défini" >&2
     return 1
   fi
 
-  tmp_file="${CONFIG_REMOTE}.tmp"
+  tmp_file="${ACTIVE_CONFIG}.tmp"
   echo "[haproxy-entrypoint] Downloading config from ${HAPROXY_CONFIG_URL}"
   if download_to_file "${HAPROXY_CONFIG_URL}" "${tmp_file}"; then
     if haproxy -c -f "${tmp_file}" >/dev/null 2>&1; then
-      mv "${tmp_file}" "${CONFIG_REMOTE}"
-      ACTIVE_CONFIG="${CONFIG_REMOTE}"
+      mv "${tmp_file}" "${ACTIVE_CONFIG}"
       echo "[haproxy-entrypoint] Remote config applied."
       return 0
     else
-      echo "[haproxy-entrypoint] Remote config invalid, keeping previous process" >&2
+      echo "[haproxy-entrypoint] Remote config invalid" >&2
     fi
   else
     echo "[haproxy-entrypoint] Failed to download ${HAPROXY_CONFIG_URL}" >&2
@@ -65,19 +63,15 @@ fetch_remote_config() {
   return 1
 }
 
-ensure_config_source() {
-  if fetch_remote_config; then
-    return 0
-  fi
-  if [ "${ACTIVE_CONFIG}" != "${CONFIG_LOCAL}" ]; then
-    echo "[haproxy-entrypoint] Falling back to local haproxy.cfg"
-  fi
-  ACTIVE_CONFIG="${CONFIG_LOCAL}"
-  return 1
+ensure_remote_config() {
+  while ! fetch_remote_config; do
+    echo "[haproxy-entrypoint] Retry download in 3s..."
+    sleep 3
+  done
 }
 
 reload_haproxy() {
-  ensure_config_source || true
+  ensure_remote_config
   echo "[haproxy-entrypoint] Reload requested at $(date)"
   if haproxy -c -f "${ACTIVE_CONFIG}" >/dev/null 2>&1; then
     if [ -f "${PIDFILE}" ]; then
@@ -100,7 +94,7 @@ watch_reload_flag() {
   done
 }
 
-ensure_config_source || true
+ensure_remote_config
 watch_reload_flag &
 
 exec haproxy -W -f "${ACTIVE_CONFIG}" -p "${PIDFILE}"

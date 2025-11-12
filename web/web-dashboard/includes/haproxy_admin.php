@@ -65,6 +65,78 @@ function loadDatabaseServers(array $ctx): array
     return parseDatabaseServers($ctx['db_cfg'] ?? null);
 }
 
+function getSessionMode(array $ctx): string
+{
+    $configPath = $ctx['web_cfg'] ?? null;
+    if (!$configPath || !file_exists($configPath)) {
+        return 'haproxy';
+    }
+
+    $lines = file($configPath, FILE_IGNORE_NEW_LINES);
+    if ($lines === false) {
+        return 'haproxy';
+    }
+
+    $insideBackend  = false;
+    $backendPattern = '/^backend\s+' . preg_quote(WEB_BACKEND, '/') . '\b/i';
+    $sectionPattern = '/^(frontend|backend|listen|global|defaults)\b/i';
+
+    foreach ($lines as $line) {
+        $trim = ltrim($line);
+        if (!$insideBackend && preg_match($backendPattern, $trim)) {
+            $insideBackend = true;
+            continue;
+        }
+        if ($insideBackend) {
+            if (preg_match($sectionPattern, $trim)) {
+                break;
+            }
+            if (preg_match('/^cookie\s+SRV\b/i', $trim)) {
+                return 'haproxy';
+            }
+        }
+    }
+
+    return 'database';
+}
+
+function handleSessionMode(array $ctx, array $data): void
+{
+    $mode = $data['mode'] ?? '';
+    if (!in_array($mode, ['haproxy', 'database'], true)) {
+        addFlash('error', 'Mode de session invalide.');
+        return;
+    }
+
+    $configPath = $ctx['web_cfg'] ?? null;
+    if (!$configPath || !file_exists($configPath)) {
+        addFlash('error', 'Configuration HAProxy Web introuvable.');
+        return;
+    }
+
+    if (!setSessionModeInConfig($configPath, $mode)) {
+        addFlash('error', "Impossible d'appliquer le mode de session {$mode}.");
+        return;
+    }
+
+    requestHaProxyReload($ctx['web_reload_flag'] ?? null, 'HAProxy Web');
+    addFlash('success', $mode === 'haproxy'
+        ? 'Gestion de session par HAProxy (sticky cookie) activée.'
+        : 'Gestion de session via la base de données activée (sticky désactivé).');
+}
+
+function handleDashboardRefresh(array $ctx): void
+{
+    $snapshot = captureRuntimeSnapshot($ctx);
+    if ($snapshot) {
+        $_SESSION['runtime_snapshot'] = $snapshot;
+        addFlash('success', 'Statuts mis à jour depuis HAProxy runtime.');
+    } else {
+        unset($_SESSION['runtime_snapshot']);
+        addFlash('warning', "Impossible d'interroger les sockets runtime HAProxy.");
+    }
+}
+
 function handleAddWeb(array $ctx, array $data): void
 {
     $configPath = $ctx['web_cfg'] ?? null;
@@ -226,7 +298,6 @@ function handleDatabaseForm(array $ctx, array $data): void
     $name         = trim($data['name'] ?? '');
     $host         = trim($data['host'] ?? '');
     $port         = filter_var($data['port'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 65535]]);
-    $role         = trim($data['role'] ?? '');
     $gtid         = !empty($data['gtid']);
 
     $errors = [];
@@ -238,9 +309,6 @@ function handleDatabaseForm(array $ctx, array $data): void
     }
     if ($port === false) {
         $errors[] = 'Port MySQL invalide.';
-    }
-    if (!validateDatabaseRole($role)) {
-        $errors[] = 'Rôle invalide (Master, Replica ou Master-Master).';
     }
     if ($operation === 'update' && $originalName === '') {
         $errors[] = 'Instance d’origine manquante pour la mise à jour.';
@@ -266,7 +334,7 @@ function handleDatabaseForm(array $ctx, array $data): void
         'name'          => $name,
         'host'          => $host,
         'port'          => (int) $port,
-        'role'          => $role,
+        'role'          => 'Master-Master',
         'gtid'          => $gtid,
         'health_check'  => true,
     ];
@@ -395,6 +463,153 @@ function runtimeCommand(?string $socket, string $command): bool
     return true;
 }
 
+function runtimeCommandLines(?string $socket, string $command): ?array
+{
+    if (!$socket || !file_exists($socket)) {
+        return null;
+    }
+
+    $conn = @stream_socket_client('unix://' . $socket, $errno, $errStr, 1);
+    if (!$conn) {
+        return null;
+    }
+
+    fwrite($conn, $command . "\n");
+    stream_set_timeout($conn, 1);
+    $lines = [];
+    while (!feof($conn)) {
+        $chunk = fgets($conn);
+        if ($chunk === false) {
+            break;
+        }
+        $lines[] = rtrim($chunk, "\r\n");
+    }
+    fclose($conn);
+
+    return $lines ?: null;
+}
+
+function captureRuntimeSnapshot(array $ctx): ?array
+{
+    $webStats = fetchBackendRuntimeStats($ctx['web_runtime_socket'] ?? null, WEB_BACKEND);
+    $dbStats  = fetchBackendRuntimeStats($ctx['db_runtime_socket'] ?? null, DB_BACKEND);
+
+    if (empty($webStats) && empty($dbStats)) {
+        return null;
+    }
+
+    return [
+        'web'         => $webStats,
+        'db'          => $dbStats,
+        'generated_at'=> time(),
+    ];
+}
+
+function fetchBackendRuntimeStats(?string $socket, string $backend): array
+{
+    $lines = runtimeCommandLines($socket, 'show stat');
+    if (!$lines) {
+        return [];
+    }
+
+    $header = null;
+    $stats  = [];
+    foreach ($lines as $line) {
+        if ($line === '' || $line === '#') {
+            continue;
+        }
+        if ($line[0] === '#') {
+            $csv = str_getcsv(ltrim(substr($line, 1)));
+            if ($csv) {
+                $header = $csv;
+            }
+            continue;
+        }
+        if (!$header) {
+            continue;
+        }
+        $row = str_getcsv($line);
+        if (count($row) !== count($header)) {
+            continue;
+        }
+        $assoc = array_combine($header, $row);
+        if (!$assoc) {
+            continue;
+        }
+        if (($assoc['pxname'] ?? '') !== $backend) {
+            continue;
+        }
+        $serverName = $assoc['svname'] ?? '';
+        if ($serverName === '' || strtoupper($serverName) === 'BACKEND') {
+            continue;
+        }
+        $stats[$serverName] = [
+            'status'       => $assoc['status'] ?? '',
+            'check_status' => $assoc['check_status'] ?? ($assoc['check_code'] ?? ''),
+            'lastchk'      => $assoc['last_chk'] ?? '',
+            'lastchg'      => isset($assoc['lastchg']) ? (int) $assoc['lastchg'] : null,
+        ];
+    }
+
+    return $stats;
+}
+
+function decorateWithRuntimeStats(array $servers, array $runtimeStats): array
+{
+    foreach ($servers as &$server) {
+        $name = $server['name'] ?? null;
+        if (!$name || !isset($runtimeStats[$name])) {
+            continue;
+        }
+        $stat = $runtimeStats[$name];
+        if (!empty($stat['status'])) {
+            $server['status'] = strtoupper($stat['status']);
+        }
+        $details = [];
+        if (!empty($stat['check_status'])) {
+            $details[] = $stat['check_status'];
+        }
+        if (!empty($stat['lastchk'])) {
+            $details[] = $stat['lastchk'];
+        }
+        if (!empty($stat['lastchg'])) {
+            $details[] = 'Δ ' . formatDuration((int) $stat['lastchg']);
+        }
+        if ($details) {
+            $server['last_check'] = implode(' · ', $details);
+        }
+    }
+
+    return $servers;
+}
+
+function formatDuration(int $seconds): string
+{
+    if ($seconds < 60) {
+        return $seconds . 's';
+    }
+    $minutes = intdiv($seconds, 60);
+    $seconds = $seconds % 60;
+    if ($minutes < 60) {
+        return $minutes . 'm' . ($seconds ? ' ' . $seconds . 's' : '');
+    }
+    $hours   = intdiv($minutes, 60);
+    $minutes = $minutes % 60;
+    if ($hours < 24) {
+        return $hours . 'h' . ($minutes ? ' ' . $minutes . 'm' : '');
+    }
+    $days = intdiv($hours, 24);
+    $hours = $hours % 24;
+    $parts = [$days . 'j'];
+    if ($hours) {
+        $parts[] = $hours . 'h';
+    }
+    if ($minutes) {
+        $parts[] = $minutes . 'm';
+    }
+    return implode(' ', $parts);
+}
+
 function validateIdentifier(string $value): bool
 {
     return (bool) preg_match('/^[A-Za-z0-9._-]+$/', $value);
@@ -403,11 +618,6 @@ function validateIdentifier(string $value): bool
 function validateHost(string $value): bool
 {
     return (bool) preg_match('/^[A-Za-z0-9._-]+$/', $value) || filter_var($value, FILTER_VALIDATE_IP);
-}
-
-function validateDatabaseRole(string $role): bool
-{
-    return in_array($role, ['Master', 'Replica', 'Master-Master'], true);
 }
 
 function insertServerLine(string $path, string $backend, string $line): bool
@@ -423,6 +633,54 @@ function insertServerLine(string $path, string $backend, string $line): bool
     }
 
     return writeConfig($path, $updated);
+}
+
+function setSessionModeInConfig(string $path, string $mode): bool
+{
+    $lines = file($path, FILE_IGNORE_NEW_LINES);
+    if ($lines === false) {
+        return false;
+    }
+
+    $backendPattern = '/^backend\s+' . preg_quote(WEB_BACKEND, '/') . '\b/i';
+    $sectionPattern = '/^(frontend|backend|listen|global|defaults)\b/i';
+    $insideBackend  = false;
+    $inserted       = false;
+    $result         = [];
+
+    foreach ($lines as $line) {
+        $trim = ltrim($line);
+        if (!$insideBackend && preg_match($backendPattern, $trim)) {
+            $insideBackend = true;
+            $result[] = $line;
+            continue;
+        }
+        if ($insideBackend) {
+            if (preg_match($sectionPattern, $trim)) {
+                if ($mode === 'haproxy' && !$inserted) {
+                    $result[] = '    cookie SRV insert indirect nocache';
+                    $inserted = true;
+                }
+                $result[] = $line;
+                $insideBackend = false;
+                continue;
+            }
+            if (preg_match('/^cookie\s+SRV\b/i', $trim)) {
+                continue;
+            }
+            if ($mode === 'haproxy' && !$inserted && preg_match('/^option\b/i', $trim)) {
+                $result[] = '    cookie SRV insert indirect nocache';
+                $inserted = true;
+            }
+        }
+        $result[] = $line;
+    }
+
+    if ($insideBackend && $mode === 'haproxy' && !$inserted) {
+        $result[] = '    cookie SRV insert indirect nocache';
+    }
+
+    return writeConfig($path, $result);
 }
 
 function injectLineIntoBackend(array $lines, string $backend, string $line): ?array
@@ -644,17 +902,15 @@ function parseDatabaseServerDefinition(string $line): ?array
         return null;
     }
     [$host, $port] = explodeAddress($parts[2]);
-    $meta      = parseMetaComment($comment);
-    $roleRaw   = $meta['role'] ?? 'GTID Sync';
-    $roleValue = in_array($roleRaw, ['Master', 'Replica', 'Master-Master'], true) ? $roleRaw : 'Master';
-    $gtid      = strtolower($meta['gtid'] ?? 'on');
+    $meta           = parseMetaComment($comment);
+    $gtid           = strtolower($meta['gtid'] ?? 'on');
 
     return [
         'name'          => $parts[1],
         'host'          => $host,
         'port'          => $port,
-        'role'          => $roleValue,
-        'role_label'    => $roleRaw,
+        'role'          => 'Master-Master',
+        'role_label'    => 'Master-Master',
         'gtid'          => $gtid === 'on',
         'gtid_label'    => $gtid,
         'health_check'  => hasFlag($parts, 'check'),
@@ -843,8 +1099,8 @@ function defaultWebServers(): array
 function defaultDatabaseServers(): array
 {
     return [
-        ['name' => 'mysql1', 'ip' => '192.168.1.10', 'port' => '3306', 'status' => 'OK', 'role' => 'GTID Sync', 'role_raw' => 'Master', 'gtid' => 'ON', 'gtid_bool' => true, 'last_check' => '—', 'disabled' => false, 'health_check' => true],
-        ['name' => 'mysql2', 'ip' => '192.168.1.11', 'port' => '3306', 'status' => 'OK', 'role' => 'GTID Sync', 'role_raw' => 'Replica', 'gtid' => 'ON', 'gtid_bool' => true, 'last_check' => '—', 'disabled' => false, 'health_check' => true],
+        ['name' => 'mysql1', 'ip' => '192.168.1.10', 'port' => '3306', 'status' => 'OK', 'role' => 'Master-Master', 'role_raw' => 'Master-Master', 'gtid' => 'ON', 'gtid_bool' => true, 'last_check' => '—', 'disabled' => false, 'health_check' => true],
+        ['name' => 'mysql2', 'ip' => '192.168.1.11', 'port' => '3306', 'status' => 'OK', 'role' => 'Master-Master', 'role_raw' => 'Master-Master', 'gtid' => 'ON', 'gtid_bool' => true, 'last_check' => '—', 'disabled' => false, 'health_check' => true],
     ];
 }
 

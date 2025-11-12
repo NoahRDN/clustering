@@ -14,6 +14,13 @@ switch ($formType) {
     case 'web_action':
         handleWebAction($ctx, $_POST);
         break;
+    case 'session_mode':
+        handleSessionMode($ctx, $_POST);
+        $redirect = 'index.php#session-mode';
+        break;
+    case 'refresh_dashboard':
+        handleDashboardRefresh($ctx);
+        break;
     default:
         addFlash('error', 'Formulaire inconnu.');
         break;

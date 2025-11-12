@@ -6,6 +6,16 @@ $ctx         = buildDashboardContext();
 $messages    = consumeFlashes();
 $webServers  = loadWebServers($ctx);
 $dbServers   = loadDatabaseServers($ctx);
+$sessionMode = getSessionMode($ctx);
+$runtimeSnapshot = $_SESSION['runtime_snapshot'] ?? null;
+if (is_array($runtimeSnapshot)) {
+    if (!empty($runtimeSnapshot['web'])) {
+        $webServers = decorateWithRuntimeStats($webServers, $runtimeSnapshot['web']);
+    }
+    if (!empty($runtimeSnapshot['db'])) {
+        $dbServers = decorateWithRuntimeStats($dbServers, $runtimeSnapshot['db']);
+    }
+}
 
 $webFormMode = 'create';
 $webFormData = [
@@ -21,7 +31,6 @@ $dbFormData = [
     'name'         => '',
     'host'         => '',
     'port'         => '3306',
-    'role'         => '',
     'gtid'         => true,
 ];
 
@@ -48,7 +57,6 @@ if ($editDbName !== '') {
         $dbFormData['name']     = $currentDb['name'];
         $dbFormData['host']     = $currentDb['ip'];
         $dbFormData['port']     = $currentDb['port'] ?: '3306';
-        $dbFormData['role']     = $currentDb['role_raw'] ?? $currentDb['role'];
         $dbFormData['gtid']     = $currentDb['gtid_bool'] ?? true;
     } else {
         $messages[] = ['type' => 'warning', 'text' => "Instance {$editDbName} introuvable dans la configuration."];
@@ -86,6 +94,13 @@ if ($editDbName !== '') {
             padding: 32px;
             box-shadow: 0 25px 70px rgba(24, 62, 125, 0.15);
         }
+        .dashboard-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+            margin-bottom: 16px;
+        }
         h1 {
             margin: 0 0 16px;
             font-size: 28px;
@@ -93,6 +108,13 @@ if ($editDbName !== '') {
             gap: 12px;
             align-items: center;
             color: #0c4ec9;
+        }
+        .runtime-info {
+            font-size: 13px;
+            color: #475569;
+            background: #f1f5ff;
+            padding: 8px 14px;
+            border-radius: 999px;
         }
         .flash-container {
             display: flex;
@@ -205,6 +227,32 @@ if ($editDbName !== '') {
         .status { font-weight: 600; }
         .status.ok { color: #089f64; }
         .status.down { color: #d73952; }
+        .session-toggle {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: flex-start;
+        }
+        .session-toggle .toggle-option {
+            flex: 1;
+            min-width: 220px;
+            border: 1px solid rgba(18, 59, 135, 0.15);
+            border-radius: 14px;
+            padding: 14px;
+            background: #fff;
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        .session-toggle .toggle-option input {
+            margin-top: 4px;
+        }
+        .session-toggle button {
+            align-self: center;
+            margin-left: auto;
+        }
         .reference {
             font-family: "Fira Code", Consolas, monospace;
             white-space: pre;
@@ -220,6 +268,19 @@ if ($editDbName !== '') {
 <body>
     <div class="dashboard">
         <h1>🧭 HAProxy Cluster Dashboard</h1>
+        <div class="dashboard-actions">
+            <form method="post" action="actions.php">
+                <input type="hidden" name="form_type" value="refresh_dashboard">
+                <button type="submit" class="primary">🔄 Rafraîchir les statuts</button>
+            </form>
+            <span class="runtime-info">
+                <?php if (is_array($runtimeSnapshot) && !empty($runtimeSnapshot['generated_at'])): ?>
+                    Dernière lecture runtime&nbsp;: <?= date('d/m/Y H:i:s', (int) $runtimeSnapshot['generated_at']) ?>
+                <?php else: ?>
+                    Pas encore synchronisé avec HAProxy /stats – cliquez sur Rafraîchir.
+                <?php endif; ?>
+            </span>
+        </div>
 
         <?php if (!empty($messages)): ?>
             <div class="flash-container">
@@ -230,6 +291,29 @@ if ($editDbName !== '') {
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
+
+        <section id="session-mode">
+            <h2>🎛️ Mode de gestion des sessions</h2>
+            <p>Choisissez si la cohérence des sessions est assurée par HAProxy (cookie SRV collant) ou par l’application (sessions partagées en base de données, utile pour illustrer un failover réel).</p>
+            <form class="session-toggle" method="post" action="actions.php#session-mode">
+                <input type="hidden" name="form_type" value="session_mode">
+                <label class="toggle-option">
+                    <input type="radio" name="mode" value="haproxy" <?= $sessionMode === 'haproxy' ? 'checked' : '' ?>>
+                    <span>
+                        <strong>Sticky sessions HAProxy</strong><br>
+                        Un cookie `SRV` est injecté pour renvoyer chaque client vers le même serveur (pratique pour les sessions locales).
+                    </span>
+                </label>
+                <label class="toggle-option">
+                    <input type="radio" name="mode" value="database" <?= $sessionMode === 'database' ? 'checked' : '' ?>>
+                    <span>
+                        <strong>Sessions via base de données</strong><br>
+                        HAProxy répartit les requêtes sans persistance, l’application s’appuie sur la DB pour partager les sessions.
+                    </span>
+                </label>
+                <button type="submit" class="primary">Appliquer</button>
+            </form>
+        </section>
 
         <section id="web-form">
             <h2><?= $webFormMode === 'update' ? 'Modifier un serveur Web' : 'Ajouter un serveur Web' ?></h2>
@@ -336,8 +420,9 @@ if ($editDbName !== '') {
             </table>
         </section>
 
-        <!-- <section id="db-form">
+        <section id="db-form">
             <h2><?= $dbFormMode === 'update' ? 'Modifier une base de données' : 'Ajouter une base de données' ?></h2>
+            <p>Utilisez ce formulaire pour déclarer une nouvelle instance MySQL (y compris un nœud Master↔Master utilisant la même base de données). Chaque entrée est injectée dans le backend `mysql_back` d’HAProxy afin de tester les scénarios multi-masters.</p>
             <form class="inline" method="post" action="db-actions.php#db-form">
                 <input type="hidden" name="form_type" value="add_db">
                 <input type="hidden" name="operation" value="<?= $dbFormMode ?>">
@@ -355,15 +440,6 @@ if ($editDbName !== '') {
                     <input type="number" name="port" value="<?= htmlspecialchars($dbFormData['port']) ?>" min="1" max="65535" required>
                 </div>
                 <div class="form-field">
-                    <label>Rôle</label>
-                    <select name="role" required>
-                        <option value="" disabled <?= $dbFormMode === 'create' ? 'selected' : '' ?>>Choisir</option>
-                        <?php foreach (['Master', 'Replica', 'Master-Master'] as $role): ?>
-                            <option value="<?= $role ?>" <?= $dbFormData['role'] === $role ? 'selected' : '' ?>><?= $role ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="form-field">
                     <label>&nbsp;</label>
                     <label style="font-size:13px; display:flex; align-items:center; gap:8px;">
                         <input type="checkbox" name="gtid" value="1" <?= $dbFormData['gtid'] ? 'checked' : '' ?>>
@@ -377,7 +453,7 @@ if ($editDbName !== '') {
                     <?php endif; ?>
                 </div>
             </form>
-        </section> -->
+        </section>
 
         <section>
             <h2>🗄️ Bases de données</h2>
@@ -411,8 +487,8 @@ if ($editDbName !== '') {
                         <td><?= htmlspecialchars($db['last_check']) ?></td>
                         <td>
                             <div class="row-actions">
-                                <!-- <a href="?edit_db=<?= urlencode($db['name']) ?>#db-form">Modifier</a> -->
-                                <!-- <form method="post" action="db-actions.php">
+                                <a href="?edit_db=<?= urlencode($db['name']) ?>#db-form">Modifier</a>
+                                <form method="post" action="db-actions.php">
                                     <input type="hidden" name="form_type" value="db_action">
                                     <input type="hidden" name="action" value="delete">
                                     <input type="hidden" name="server" value="<?= htmlspecialchars($db['name']) ?>">
@@ -423,7 +499,7 @@ if ($editDbName !== '') {
                                     <input type="hidden" name="action" value="refresh">
                                     <input type="hidden" name="server" value="<?= htmlspecialchars($db['name']) ?>">
                                     <button type="submit">Rafraîchir état</button>
-                                </form> -->
+                                </form>
                                 <form method="post" action="db-actions.php">
                                     <input type="hidden" name="form_type" value="db_action">
                                     <input type="hidden" name="action" value="restart">

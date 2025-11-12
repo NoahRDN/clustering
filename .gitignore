@@ -4,3 +4,4 @@ haproxy-db/runtime/
 
 # Fichiers d'environnement locaux
 .env
+.env2

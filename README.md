@@ -58,7 +58,6 @@ Mettez à jour les valeurs suivantes si les IP changent :
 | `WEB2_REMOTE_IP` | PC2 | IP du poste qui héberge `web2` (PC1 maintenant, PC3 plus tard) |
 | `DB_PROXY_HOST` | PC2 | Adresse à laquelle les serveurs web contactent `haproxy-db` |
 | `MYSQL1_REMOTE_IP`, `MYSQL1_PORT` | PC1 | Adresse/port publiés de `mysql1` sur PC2 |
-| `MYSQL2_REMOTE_IP` | PC2 | IP du poste qui héberge `mysql2` (nécessaire pour la réplication master-master) |
 | `WEB_RUNTIME_API_URL`, `DB_RUNTIME_API_URL` | PC1 & PC2 | URL REST des services runtime (ex : `http://172.20.10.2:9101`) |
 | `WEB_RUNTIME_API_TOKEN`, `DB_RUNTIME_API_TOKEN` | PC1 & PC2 | Token partagé pour sécuriser les appels REST |
 

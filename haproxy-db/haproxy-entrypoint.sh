@@ -4,13 +4,22 @@ set -euo pipefail
 CONFIG="/usr/local/etc/haproxy/haproxy.cfg"
 PIDFILE="/var/run/haproxy/haproxy.pid"
 RUNTIME_DIR="/var/run/haproxy"
-FLAG_FILE="${RUNTIME_DIR}/reload.flag"
+EXTERNAL_RUNTIME="/haproxy-db-runtime"
 
 mkdir -p "${RUNTIME_DIR}" || true
 chmod 777 "${RUNTIME_DIR}" 2>/dev/null || true
+if [[ -n "${EXTERNAL_RUNTIME}" ]]; then
+  mkdir -p "${EXTERNAL_RUNTIME}" 2>/dev/null || true
+fi
+
+FLAG_FILES=("${RUNTIME_DIR}/reload.flag")
+if [[ -d "${EXTERNAL_RUNTIME}" ]]; then
+  FLAG_FILES+=("${EXTERNAL_RUNTIME}/reload.flag")
+fi
 
 reload_haproxy() {
-  echo "[haproxy-db-entrypoint] Reload requested at $(date --iso-8601=seconds)"
+  local source="${1:-manual}"
+  echo "[haproxy-db-entrypoint] Reload requested (${source}) at $(date --iso-8601=seconds)"
   if haproxy -c -f "${CONFIG}" >/dev/null 2>&1; then
     if [[ -f "${PIDFILE}" ]]; then
       haproxy -W -f "${CONFIG}" -p "${PIDFILE}" -sf "$(cat "${PIDFILE}")"
@@ -24,10 +33,12 @@ reload_haproxy() {
 
 watch_reload_flag() {
   while true; do
-    if [[ -f "${FLAG_FILE}" ]]; then
-      rm -f "${FLAG_FILE}"
-      reload_haproxy
-    fi
+    for flag in "${FLAG_FILES[@]}"; do
+      if [[ -f "${flag}" ]]; then
+        rm -f "${flag}"
+        reload_haproxy "${flag}"
+      fi
+    done
     sleep 1
   done
 }

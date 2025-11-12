@@ -94,3 +94,13 @@ problematique:
 - utilite de Dernier Check et son fonctionnement et aussi utilite  des actions et different contenu dans action de Dashboard
 - quels sont les differnet fonctionnemnt de celui ci : rafraichir, recharger HAProxy, Nettoyer config? 
 - qu'en est il si il y a aussi des base de donnée de different type qui est utiliser ? 
+
+===================================
+
+- (ok) afficher la liste des addresse ip qui on visiter ce serveur avec ce qui ont modifer dans la page de test session
+- (ok) changer en page presentable le test de connexion (adresse ip / nom logique au lieu de ce qui est afficher actuellement, autre information qui peut aider)
+- (ok) ajouter une bouton de refresh pour refresh le tableau de bord en entier et etre a jour pour etre similaire a celle de /status
+- (ok) ajouter une bouton toogle dans dashboard pour choisir si on utilise la gestion de session de ha-proxy ou celle avec le base de donnee 
+- (ok) ajouter une section pour ajouter une base de donne monte en master to mater et meme base de donnee
+- rediger une explication des config 
+- effectuer une readme pour lancer le projet 

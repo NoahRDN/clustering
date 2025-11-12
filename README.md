@@ -25,7 +25,7 @@ L’objectif est que PC2 serve le site aux clients tandis que PC1 fait office de
    touch haproxy-db/runtime/reload.flag   # pour HAProxy DB
    ```
 
-Les anciens fichiers `haproxy-web/haproxy.cfg` et `haproxy-db/haproxy.cfg` restent présents uniquement comme **configuration de secours** si le téléchargement échoue.
+Les anciens fichiers locaux ne sont plus utilisés : seules les copies situées dans `shared-config/` servent de référence, et tous les HAProxy les téléchargent depuis `config-service`.
 
 ---
 
@@ -88,7 +88,7 @@ Quand PC3 sera en place, copiez `.env.pc1-example` dessus, remplacez `WEB2_REMOT
 ## 3. Accès et tests
 
 - Client (PC1 ou autre) → `http://172.20.10.2:8080` pour passer par `haproxy-web`.
-- HAProxy web → `web2` via `pc3-web2:8082` (défini dans `haproxy-web/haproxy.cfg`). Mettre à jour `WEB2_REMOTE_IP` avant de redémarrer `haproxy-web`.
+- HAProxy web → `web2` via `pc3-web2:8082` (voir `shared-config/haproxy-web.cfg`). Mettre à jour `WEB2_REMOTE_IP` avant de redémarrer `haproxy-web`.
 - Serveurs PHP → base via `DB_PROXY_HOST`/`DB_PROXY_PORT` (configurable, voir `web/web*/index-db.php`).
 - Vérifier la réplication : `docker compose logs replication-init` sur PC1, ou se connecter à MySQL via `mysql -h 172.20.10.4 -P 3307 -uroot -proot`.
 - Vérifier la config centralisée : `curl http://172.20.10.4:8088/haproxy-web.cfg`.

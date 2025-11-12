@@ -23,10 +23,10 @@ services:
       - "8080:8080"
       - "8404:8404"
     volumes:
-      - ./haproxy-web/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
       - ./haproxy-web/runtime:/var/run/haproxy
       - ./haproxy-web/haproxy-entrypoint.sh:/docker-entrypoint-custom.sh:ro
     depends_on:
+      - config-service
       - web1
       - web2
     networks:
@@ -48,10 +48,10 @@ services:
       - "3307:3307"      # HAProxy écoute pour MySQL
       - "8405:8405"      # page de stats DB
     volumes:
-      - ./haproxy-db/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
       - ./haproxy-db/runtime:/var/run/haproxy
       - ./haproxy-db/haproxy-entrypoint.sh:/docker-entrypoint-custom.sh:ro
     depends_on:
+      - config-service
       - mysql1
       - mysql2
     networks:
@@ -108,6 +108,7 @@ services:
       - ./haproxy-db:/data/haproxy-db
       - ./haproxy-web/runtime:/haproxy-runtime
       - ./haproxy-db/runtime:/haproxy-db-runtime
+      - ./shared-config:/data/shared-config
     networks:
       - private_net
       - public_net

@@ -18,9 +18,7 @@ services:
   # 🔹 HAProxy pour les serveurs Web
   # ----------------------------
   haproxy-web:
-    build:
-      context: ./haproxy-base
-    image: haproxy-with-curl
+    build: ./haproxy-web
     platform: linux/amd64
     container_name: haproxy-web
     ports:
@@ -28,7 +26,8 @@ services:
       - "8404:8404"
     volumes:
       - ./haproxy-web/runtime:/var/run/haproxy
-      - ./haproxy-web/haproxy-entrypoint.sh:/docker-entrypoint-custom.sh:ro
+      # Fallback local config (montré en lecture seule)
+      - ./haproxy-web/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg.local:ro
     depends_on:
       - config-service
       - web1
@@ -39,16 +38,13 @@ services:
     extra_hosts:
       - "pc3-web2=${WEB2_REMOTE_IP:-172.20.10.4}"
     environment:
-      HAPROXY_CONFIG_URL: ${HAPROXY_WEB_CONFIG_URL:-http://config-service/haproxy-web.cfg}
-    command: ["/bin/bash", "/docker-entrypoint-custom.sh"]
+      HAPROXY_WEB_CONFIG_URL: ${HAPROXY_WEB_CONFIG_URL:-http://config-service/haproxy-web.cfg}
 
   # ----------------------------
   # 🔹 HAProxy pour la base de données
   # ----------------------------
   haproxy-db:
-    build:
-      context: ./haproxy-base
-    image: haproxy-with-curl
+    build: ./haproxy-db
     platform: linux/amd64
     container_name: haproxy-db
     ports:
@@ -56,7 +52,7 @@ services:
       - "8405:8405"
     volumes:
       - ./haproxy-db/runtime:/var/run/haproxy
-      - ./haproxy-db/haproxy-entrypoint.sh:/docker-entrypoint-custom.sh:ro
+      - ./haproxy-db/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg.local:ro
     depends_on:
       - config-service
       - mysql1
@@ -66,8 +62,7 @@ services:
     extra_hosts:
       - "pc2-mysql1=${MYSQL1_REMOTE_IP:-172.20.10.2}"
     environment:
-      HAPROXY_CONFIG_URL: ${HAPROXY_DB_CONFIG_URL:-http://config-service/haproxy-db.cfg}
-    command: ["/bin/bash", "/docker-entrypoint-custom.sh"]
+      HAPROXY_DB_CONFIG_URL: ${HAPROXY_DB_CONFIG_URL:-http://config-service/haproxy-db.cfg}
 
   runtime-api-web:
     build: ./runtime-api

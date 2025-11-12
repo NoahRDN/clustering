@@ -6,9 +6,11 @@ RUNTIME_DIR="/var/run/haproxy"
 FLAG_FILE="${RUNTIME_DIR}/reload.flag"
 ACTIVE_CONFIG="${RUNTIME_DIR}/active.cfg"
 APT_READY=0
+ADMIN_SOCKET="/var/run/haproxy/admin.sock"
 
 mkdir -p "${RUNTIME_DIR}"
 chmod 777 "${RUNTIME_DIR}" 2>/dev/null || true
+rm -f "${ADMIN_SOCKET}" 2>/dev/null || true
 
 download_to_file() {
   url="$1"

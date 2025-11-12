@@ -17,9 +17,9 @@ docker rm -f mysql1 mysql2 mysql3 haproxy-db haproxy-web 2>$null
 Write-Host ">> Nettoyage des reseaux Docker inutilises..." -ForegroundColor Yellow
 docker network prune -f
 
-# Redémarrage de la stack Docker Compose avec plateforme forcée
-Write-Host ">> Redemarrage de la stack Docker Compose (plateforme amd64)..." -ForegroundColor Green
-docker compose up -d --build --force-recreate --platform linux/amd64
+# Redémarrage de la stack Docker Compose
+Write-Host ">> Redemarrage de la stack Docker Compose..." -ForegroundColor Green
+docker compose up -d --build --force-recreate
 
 # Liste des conteneurs actifs
 Write-Host "`n=== Liste des conteneurs actifs ===" -ForegroundColor Cyan

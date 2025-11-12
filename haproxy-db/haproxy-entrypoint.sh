@@ -1,39 +1,6 @@
 #!/bin/sh
 set -eu
 
-CFG_URL=${HAPROXY_DB_CONFIG_URL:-}
-LOCAL_CFG=/usr/local/etc/haproxy/haproxy.cfg.local
-TARGET_CFG=/usr/local/etc/haproxy/haproxy.cfg
-
-echo "[entrypoint] Starting haproxy-db entrypoint"
-
-if [ -n "$CFG_URL" ]; then
-  echo "[entrypoint] Trying to download config from $CFG_URL"
-  if curl -sSf "$CFG_URL" -o "$TARGET_CFG"; then
-    echo "[entrypoint] Downloaded remote config to $TARGET_CFG"
-  else
-    echo "[entrypoint] Failed to download remote config, falling back to local"
-    if [ -f "$LOCAL_CFG" ]; then
-      cp "$LOCAL_CFG" "$TARGET_CFG"
-    else
-      echo "[entrypoint] No local config found at $LOCAL_CFG — exiting"
-      exit 1
-    fi
-  fi
-else
-  echo "[entrypoint] No HAPROXY_DB_CONFIG_URL provided, using local config"
-  if [ -f "$LOCAL_CFG" ]; then
-    cp "$LOCAL_CFG" "$TARGET_CFG"
-  else
-    echo "[entrypoint] No local config found at $LOCAL_CFG — exiting"
-    exit 1
-  fi
-fi
-
-exec "$@"
-#!/bin/sh
-set -eu
-
 PIDFILE="/var/run/haproxy/haproxy.pid"
 RUNTIME_DIR="/var/run/haproxy"
 FLAG_FILE="${RUNTIME_DIR}/reload.flag"

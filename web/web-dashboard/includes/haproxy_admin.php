@@ -31,6 +31,8 @@ function buildDashboardContext(): array
         'web_runtime_token' => getenv('WEB_RUNTIME_API_TOKEN') ?: null,
         'db_runtime_api'    => getenv('DB_RUNTIME_API_URL') ?: null,
         'db_runtime_token'  => getenv('DB_RUNTIME_API_TOKEN') ?: null,
+        'web_stats_url'     => getenv('WEB_STATS_URL') ?: null,
+        'db_stats_url'      => getenv('DB_STATS_URL') ?: null,
     ];
 }
 

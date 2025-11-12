@@ -159,6 +159,8 @@ services:
       WEB_RUNTIME_API_TOKEN: ${WEB_RUNTIME_API_TOKEN:-}
       DB_RUNTIME_API_URL: ${DB_RUNTIME_API_URL:-}
       DB_RUNTIME_API_TOKEN: ${DB_RUNTIME_API_TOKEN:-}
+      WEB_STATS_URL: ${WEB_STATS_URL:-http://localhost:8404/stats}
+      DB_STATS_URL: ${DB_STATS_URL:-http://localhost:8405/stats}
     networks:
       - private_net
       - public_net

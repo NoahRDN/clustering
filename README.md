@@ -61,6 +61,7 @@ Mettez à jour les valeurs suivantes si les IP changent :
 | `MYSQL2_REMOTE_IP` | PC2 | IP du poste qui héberge `mysql2` (nécessaire pour la réplication master-master) |
 | `WEB_RUNTIME_API_URL`, `DB_RUNTIME_API_URL` | PC1 & PC2 | URL REST des services runtime (ex : `http://172.20.10.2:9101`) |
 | `WEB_RUNTIME_API_TOKEN`, `DB_RUNTIME_API_TOKEN` | PC1 & PC2 | Token partagé pour sécuriser les appels REST |
+| `WEB_STATS_URL`, `DB_STATS_URL` | pour le dashboard | URL des pages `/stats` affichées via les nouveaux boutons d’accès rapide |
 
 Quand PC3 sera en place, copiez `.env.pc1-example` dessus, remplacez `WEB2_REMOTE_IP` et `DB_PROXY_HOST` par l’IP de PC3, puis n’exécutez plus `haproxy-db/web2/mysql2` sur PC1.
 

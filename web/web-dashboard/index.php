@@ -86,13 +86,36 @@ if ($editDbName !== '') {
             padding: 32px;
             box-shadow: 0 25px 70px rgba(24, 62, 125, 0.15);
         }
+        .header {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
         h1 {
-            margin: 0 0 16px;
+            margin: 0;
             font-size: 28px;
             display: flex;
             gap: 12px;
             align-items: center;
             color: #0c4ec9;
+        }
+        .stats-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .stats-button {
+            border-radius: 999px;
+            padding: 9px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            color: #0b2352;
+            background: #eaf2ff;
+            border: 1px solid rgba(9, 33, 77, 0.15);
         }
         .flash-container {
             display: flex;
@@ -218,8 +241,22 @@ if ($editDbName !== '') {
     </style>
 </head>
 <body>
-    <div class="dashboard">
+<?php
+$webStatsUrl = $ctx['web_stats_url'] ?? null;
+$dbStatsUrl  = $ctx['db_stats_url'] ?? null;
+?>
+<div class="dashboard">
+    <div class="header flex">
         <h1>🧭 HAProxy Cluster Dashboard</h1>
+        <div class="stats-actions">
+            <?php if ($webStatsUrl): ?>
+                <a class="stats-button" href="<?= htmlspecialchars($webStatsUrl) ?>" target="_blank" rel="noopener">🌐 Ouvrir stats Web</a>
+            <?php endif; ?>
+            <?php if ($dbStatsUrl): ?>
+                <a class="stats-button" href="<?= htmlspecialchars($dbStatsUrl) ?>" target="_blank" rel="noopener">🗄️ Ouvrir stats DB</a>
+            <?php endif; ?>
+        </div>
+    </div>
 
         <?php if (!empty($messages)): ?>
             <div class="flash-container">

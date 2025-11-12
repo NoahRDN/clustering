@@ -101,3 +101,6 @@ problematique:
 - preparer les differents scenario a présenter et finaliser en fonction de cela
 - revoir la forme pour que ca soit présentable 
 - préparer une compréhension pour les config
+
+======================
+le cas ou je me trouve actuellemenet est quand j'effectuer une modifciation au niveau systeme grace a l'interface web (par exemple arret du serveur 1), mon fichier cfg associer a cela est ajuster par consequent dont c'est normal. juste, le probleme c'est que quand je vais utiliser plusieurs pc dans la configuration de mon serveur, c'est a dire, par exemple j'ai deux pc, pc 1: config HAProxy web + web1 + bdd1; pc2: config HAProxy bdd + web2 + bdd2, et quand j'effectue une changement de mon systeme grace a l'interface web (par exemple arret serveur 1), c'est seuelement celle dans son pc qui est mise a joutr et ajuste non pas pour l'autre hors ca devrais etre les deux. Donc c'est le problematique a resoudre actuellement. J'ai quand meme quelque suggestion de solution a recherche mais si il y a d'autre plus conseiller et  plus optimise que cela, ce sera encore plus interressant. Mes suggestion de solution: -  faire en sorte qu'il ne lise qu'une seule fichier de configuration pour les 2 pc et lors du changement effectuer, directement ce sera ce fichier qui sera mise a jour. 

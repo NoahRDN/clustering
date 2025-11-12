@@ -200,6 +200,8 @@ services:
       - "${MYSQL1_PUBLISHED_PORT:-33061}:3306"
     networks:
       - private_net
+    extra_hosts:
+      - "pc1-mysql2=${MYSQL2_REMOTE_IP:-172.20.10.4}"
 
   mysql2:
     image: mysql:8.0
@@ -215,6 +217,8 @@ services:
       - ./mysql/mysql2/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - private_net
+    extra_hosts:
+      - "pc2-mysql1=${MYSQL1_REMOTE_IP:-172.20.10.2}"
 
   mysql3:
     image: mysql:8.0

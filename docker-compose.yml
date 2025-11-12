@@ -18,7 +18,9 @@ services:
   # 🔹 HAProxy pour les serveurs Web
   # ----------------------------
   haproxy-web:
-    image: haproxy:2.9
+    build:
+      context: ./haproxy-base
+    image: haproxy-with-curl
     platform: linux/amd64
     container_name: haproxy-web
     ports:
@@ -44,7 +46,9 @@ services:
   # 🔹 HAProxy pour la base de données
   # ----------------------------
   haproxy-db:
-    image: haproxy:2.9
+    build:
+      context: ./haproxy-base
+    image: haproxy-with-curl
     platform: linux/amd64
     container_name: haproxy-db
     ports:

@@ -65,6 +65,41 @@ services:
       HAPROXY_CONFIG_URL: ${HAPROXY_DB_CONFIG_URL:-http://config-service/haproxy-db.cfg}
     command: ["/bin/bash", "/docker-entrypoint-custom.sh"]
 
+  runtime-api-web:
+    build: ./runtime-api
+    platform: linux/amd64
+    container_name: runtime-api-web
+    depends_on:
+      - haproxy-web
+    environment:
+      ADMIN_SOCKET: /haproxy/admin.sock
+      RELOAD_FLAG: /haproxy/reload.flag
+      API_TOKEN: ${WEB_RUNTIME_API_TOKEN:-}
+    volumes:
+      - ./haproxy-web/runtime:/haproxy
+    ports:
+      - "${RUNTIME_API_WEB_PORT:-9001}:8000"
+    networks:
+      - private_net
+      - public_net
+
+  runtime-api-db:
+    build: ./runtime-api
+    platform: linux/amd64
+    container_name: runtime-api-db
+    depends_on:
+      - haproxy-db
+    environment:
+      ADMIN_SOCKET: /haproxy/admin.sock
+      RELOAD_FLAG: /haproxy/reload.flag
+      API_TOKEN: ${DB_RUNTIME_API_TOKEN:-}
+    volumes:
+      - ./haproxy-db/runtime:/haproxy
+    ports:
+      - "${RUNTIME_API_DB_PORT:-9002}:8000"
+    networks:
+      - private_net
+
   # ----------------------------
   # 🔹 Serveurs web (PHP + Apache)
   # ----------------------------
@@ -115,6 +150,11 @@ services:
       - ./haproxy-web/runtime:/haproxy-runtime
       - ./haproxy-db/runtime:/haproxy-db-runtime
       - ./shared-config:/data/shared-config
+    environment:
+      WEB_RUNTIME_API_URL: ${WEB_RUNTIME_API_URL:-}
+      WEB_RUNTIME_API_TOKEN: ${WEB_RUNTIME_API_TOKEN:-}
+      DB_RUNTIME_API_URL: ${DB_RUNTIME_API_URL:-}
+      DB_RUNTIME_API_TOKEN: ${DB_RUNTIME_API_TOKEN:-}
     networks:
       - private_net
       - public_net

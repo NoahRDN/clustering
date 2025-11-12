@@ -25,8 +25,12 @@ function buildDashboardContext(): array
             '/var/run/haproxy/admin.sock',
             $projectRoot . '/haproxy-db/runtime/admin.sock'
         ]),
-        'web_reload_flag' => '/haproxy-runtime/reload.flag',
-        'db_reload_flag'  => '/haproxy-db-runtime/reload.flag',
+        'web_reload_flag'   => '/haproxy-runtime/reload.flag',
+        'db_reload_flag'    => '/haproxy-db-runtime/reload.flag',
+        'web_runtime_api'   => getenv('WEB_RUNTIME_API_URL') ?: null,
+        'web_runtime_token' => getenv('WEB_RUNTIME_API_TOKEN') ?: null,
+        'db_runtime_api'    => getenv('DB_RUNTIME_API_URL') ?: null,
+        'db_runtime_token'  => getenv('DB_RUNTIME_API_TOKEN') ?: null,
     ];
 }
 
@@ -126,7 +130,12 @@ function handleAddWeb(array $ctx, array $data): void
         $updated = updateWebServerEntry($configPath, $payload, $originalName);
         if ($updated) {
             addFlash('success', "Serveur web {$originalName} mis à jour.");
-            requestHaProxyReload($ctx['web_reload_flag'] ?? null, 'HAProxy Web');
+            requestHaProxyReload(
+                $ctx['web_reload_flag'] ?? null,
+                'HAProxy Web',
+                $ctx['web_runtime_api'] ?? null,
+                $ctx['web_runtime_token'] ?? null
+            );
         } else {
             addFlash('error', "Impossible de mettre à jour {$originalName} (introuvable).");
         }
@@ -145,7 +154,12 @@ function handleAddWeb(array $ctx, array $data): void
     $line = implode(' ', $lineParts);
     if (insertServerLine($configPath, WEB_BACKEND, $line)) {
         addFlash('success', "Serveur web {$name} ajouté dans la configuration.");
-        requestHaProxyReload($ctx['web_reload_flag'] ?? null, 'HAProxy Web');
+        requestHaProxyReload(
+            $ctx['web_reload_flag'] ?? null,
+            'HAProxy Web',
+            $ctx['web_runtime_api'] ?? null,
+            $ctx['web_runtime_token'] ?? null
+        );
     } else {
         addFlash('error', "Impossible d'ajouter {$name} (backend introuvable ?).");
     }
@@ -170,23 +184,48 @@ function handleWebAction(array $ctx, array $data): void
     switch ($action) {
         case 'delete':
             if (removeServerEntry($configPath, WEB_BACKEND, $server)) {
-                requestHaProxyReload($ctx['web_reload_flag'] ?? null, 'HAProxy Web');
-                runtimeCommand($ctx['web_runtime_socket'] ?? null, "disable server " . WEB_BACKEND . "/{$server}");
+                requestHaProxyReload(
+                    $ctx['web_reload_flag'] ?? null,
+                    'HAProxy Web',
+                    $ctx['web_runtime_api'] ?? null,
+                    $ctx['web_runtime_token'] ?? null
+                );
+                sendRuntimeCommand(
+                    $ctx['web_runtime_api'] ?? null,
+                    $ctx['web_runtime_token'] ?? null,
+                    $ctx['web_runtime_socket'] ?? null,
+                    "disable server " . WEB_BACKEND . "/{$server}"
+                );
                 addFlash('success', "Serveur {$server} retiré du backend.");
             } else {
                 addFlash('error', "Impossible de retirer {$server} (introuvable).");
             }
             break;
         case 'refresh':
-            if (runtimeCommand($ctx['web_runtime_socket'] ?? null, "show servers state " . WEB_BACKEND)) {
+            if (sendRuntimeCommand(
+                $ctx['web_runtime_api'] ?? null,
+                $ctx['web_runtime_token'] ?? null,
+                $ctx['web_runtime_socket'] ?? null,
+                "show servers state " . WEB_BACKEND
+            )) {
                 addFlash('success', "Statut de {$server} rafraîchi (via socket runtime).");
             } else {
                 addFlash('warning', "Impossible d'interroger HAProxy runtime. Pensez à recharger manuellement.");
             }
             break;
         case 'restart':
-            $disabled = runtimeCommand($ctx['web_runtime_socket'] ?? null, "disable server " . WEB_BACKEND . "/{$server}");
-            $enabled  = runtimeCommand($ctx['web_runtime_socket'] ?? null, "enable server " . WEB_BACKEND . "/{$server}");
+            $disabled = sendRuntimeCommand(
+                $ctx['web_runtime_api'] ?? null,
+                $ctx['web_runtime_token'] ?? null,
+                $ctx['web_runtime_socket'] ?? null,
+                "disable server " . WEB_BACKEND . "/{$server}"
+            );
+            $enabled = sendRuntimeCommand(
+                $ctx['web_runtime_api'] ?? null,
+                $ctx['web_runtime_token'] ?? null,
+                $ctx['web_runtime_socket'] ?? null,
+                "enable server " . WEB_BACKEND . "/{$server}"
+            );
             if ($disabled && $enabled) {
                 addFlash('success', "Requête de redémarrage envoyée pour {$server}.");
             } else {
@@ -198,7 +237,12 @@ function handleWebAction(array $ctx, array $data): void
             $disable  = $target === 'disable';
             $updated  = setServerDisabled($configPath, $server, $disable);
             if ($updated) {
-                $runtimeOk = runtimeCommand($ctx['web_runtime_socket'] ?? null, ($disable ? 'disable' : 'enable') . " server " . WEB_BACKEND . "/{$server}");
+                $runtimeOk = sendRuntimeCommand(
+                    $ctx['web_runtime_api'] ?? null,
+                    $ctx['web_runtime_token'] ?? null,
+                    $ctx['web_runtime_socket'] ?? null,
+                    ($disable ? 'disable' : 'enable') . " server " . WEB_BACKEND . "/{$server}"
+                );
                 if (!$runtimeOk) {
                     addFlash('warning', "Configuration mise à jour mais impossible de contacter HAProxy runtime. Relance requise.");
                 } else {
@@ -275,7 +319,12 @@ function handleDatabaseForm(array $ctx, array $data): void
         $updated = updateDatabaseServerEntry($configPath, $payload, $originalName);
         if ($updated) {
             addFlash('success', "Instance {$originalName} mise à jour.");
-            requestHaProxyReload($ctx['db_reload_flag'] ?? null, 'HAProxy DB');
+            requestHaProxyReload(
+                $ctx['db_reload_flag'] ?? null,
+                'HAProxy DB',
+                $ctx['db_runtime_api'] ?? null,
+                $ctx['db_runtime_token'] ?? null
+            );
         } else {
             addFlash('error', "Impossible de modifier {$originalName} (introuvable).");
         }
@@ -286,7 +335,12 @@ function handleDatabaseForm(array $ctx, array $data): void
 
     if (insertServerLine($configPath, DB_BACKEND, $line)) {
         addFlash('success', "Base de données {$name} ajoutée dans HAProxy.");
-        requestHaProxyReload($ctx['db_reload_flag'] ?? null, 'HAProxy DB');
+        requestHaProxyReload(
+            $ctx['db_reload_flag'] ?? null,
+            'HAProxy DB',
+            $ctx['db_runtime_api'] ?? null,
+            $ctx['db_runtime_token'] ?? null
+        );
     } else {
         addFlash('error', "Impossible d'ajouter {$name} (backend DB introuvable ?).");
     }
@@ -311,23 +365,48 @@ function handleDatabaseAction(array $ctx, array $data): void
     switch ($action) {
         case 'delete':
             if (removeServerEntry($configPath, DB_BACKEND, $server)) {
-                requestHaProxyReload($ctx['db_reload_flag'] ?? null, 'HAProxy DB');
-                runtimeCommand($ctx['db_runtime_socket'] ?? null, "disable server " . DB_BACKEND . "/{$server}");
+                requestHaProxyReload(
+                    $ctx['db_reload_flag'] ?? null,
+                    'HAProxy DB',
+                    $ctx['db_runtime_api'] ?? null,
+                    $ctx['db_runtime_token'] ?? null
+                );
+                sendRuntimeCommand(
+                    $ctx['db_runtime_api'] ?? null,
+                    $ctx['db_runtime_token'] ?? null,
+                    $ctx['db_runtime_socket'] ?? null,
+                    "disable server " . DB_BACKEND . "/{$server}"
+                );
                 addFlash('success', "Instance {$server} supprimée.");
             } else {
                 addFlash('error', "Impossible de supprimer {$server} (introuvable).");
             }
             break;
         case 'refresh':
-            if (runtimeCommand($ctx['db_runtime_socket'] ?? null, "show servers state " . DB_BACKEND)) {
+            if (sendRuntimeCommand(
+                $ctx['db_runtime_api'] ?? null,
+                $ctx['db_runtime_token'] ?? null,
+                $ctx['db_runtime_socket'] ?? null,
+                "show servers state " . DB_BACKEND
+            )) {
                 addFlash('success', "Statut de {$server} rafraîchi.");
             } else {
                 addFlash('warning', "Impossible de contacter HAProxy DB (socket runtime).");
             }
             break;
         case 'restart':
-            $disabled = runtimeCommand($ctx['db_runtime_socket'] ?? null, "disable server " . DB_BACKEND . "/{$server}");
-            $enabled  = runtimeCommand($ctx['db_runtime_socket'] ?? null, "enable server " . DB_BACKEND . "/{$server}");
+            $disabled = sendRuntimeCommand(
+                $ctx['db_runtime_api'] ?? null,
+                $ctx['db_runtime_token'] ?? null,
+                $ctx['db_runtime_socket'] ?? null,
+                "disable server " . DB_BACKEND . "/{$server}"
+            );
+            $enabled = sendRuntimeCommand(
+                $ctx['db_runtime_api'] ?? null,
+                $ctx['db_runtime_token'] ?? null,
+                $ctx['db_runtime_socket'] ?? null,
+                "enable server " . DB_BACKEND . "/{$server}"
+            );
             if ($disabled && $enabled) {
                 addFlash('success', "Redémarrage logique demandé pour {$server}.");
             } else {
@@ -339,7 +418,12 @@ function handleDatabaseAction(array $ctx, array $data): void
             $disable = $target === 'disable';
             $updated = setDatabaseServerDisabled($configPath, $server, $disable);
             if ($updated) {
-                $runtimeOk = runtimeCommand($ctx['db_runtime_socket'] ?? null, ($disable ? 'disable' : 'enable') . " server " . DB_BACKEND . "/{$server}");
+                $runtimeOk = sendRuntimeCommand(
+                    $ctx['db_runtime_api'] ?? null,
+                    $ctx['db_runtime_token'] ?? null,
+                    $ctx['db_runtime_socket'] ?? null,
+                    ($disable ? 'disable' : 'enable') . " server " . DB_BACKEND . "/{$server}"
+                );
                 if (!$runtimeOk) {
                     addFlash('warning', "Configuration DB mise à jour mais impossible de contacter HAProxy (socket).");
                 } else {
@@ -354,8 +438,11 @@ function handleDatabaseAction(array $ctx, array $data): void
     }
 }
 
-function requestHaProxyReload(?string $flag, string $label): void
+function requestHaProxyReload(?string $flag, string $label, ?string $apiBase = null, ?string $apiToken = null): void
 {
+    if (runtimeApiReload($apiBase, $apiToken)) {
+        return;
+    }
     if (!$flag) {
         addFlash('warning', "Impossible de signaler le rechargement {$label} (chemin manquant).");
         return;
@@ -393,6 +480,58 @@ function runtimeCommand(?string $socket, string $command): bool
     }
     fclose($conn);
     return true;
+}
+
+function runtimeApiCommand(?string $baseUrl, ?string $token, string $command): bool
+{
+    if (!$baseUrl) {
+        return false;
+    }
+    $endpoint = rtrim($baseUrl, '/') . '/execute';
+    return runtimeApiPost($endpoint, ['command' => $command], $token);
+}
+
+function runtimeApiReload(?string $baseUrl, ?string $token): bool
+{
+    if (!$baseUrl) {
+        return false;
+    }
+    $endpoint = rtrim($baseUrl, '/') . '/reload';
+    return runtimeApiPost($endpoint, [], $token);
+}
+
+function runtimeApiPost(string $url, array $body, ?string $token): bool
+{
+    if ($token !== null && $token !== '') {
+        $body['token'] = $token;
+    }
+    $payload = json_encode($body, JSON_UNESCAPED_UNICODE);
+    $opts = [
+        'http' => [
+            'method'  => 'POST',
+            'header'  => "Content-Type: application/json\r\n",
+            'content' => $payload,
+            'timeout' => 3,
+        ],
+    ];
+    $context = stream_context_create($opts);
+    $response = @file_get_contents($url, false, $context);
+    if ($response === false) {
+        return false;
+    }
+    $decoded = json_decode($response, true);
+    if (is_array($decoded) && array_key_exists('success', $decoded)) {
+        return (bool) $decoded['success'];
+    }
+    return true;
+}
+
+function sendRuntimeCommand(?string $apiBase, ?string $apiToken, ?string $socket, string $command): bool
+{
+    if (runtimeApiCommand($apiBase, $apiToken, $command)) {
+        return true;
+    }
+    return runtimeCommand($socket, $command);
 }
 
 function validateIdentifier(string $value): bool

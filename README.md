@@ -121,6 +121,29 @@ Ces indications se retrouvent directement dans les fichiers :
 - `shared-config/haproxy-web.cfg` → ligne `server web2 pc3-web2:8082`.
 - `shared-config/haproxy-db.cfg` → ligne `server mysql1 pc2-mysql1:33061`.
 - `runtime-api/` → code source de l’API REST utilisée pour piloter HAProxy à distance.
+
+---
+
+## Synchroniser `shared-config` entre PC1 et PC2
+
+Si tu as besoin de modifier la configuration depuis un autre poste (ex. PC2) tout en gardant PC1 comme source de vérité :
+
+1. Sur PC2, copie le fichier `.env.sync-example` vers `.env.sync` et renseigne :
+   ```ini
+   SYNC_REMOTE_USER=ton_user_pc1
+   SYNC_REMOTE_HOST=192.168.1.219
+   SYNC_REMOTE_PATH=/mnt/h/itu/s5/architecture-logiciel/clustering/shared-config
+   ```
+2. Pour récupérer la dernière version des configs depuis PC1 :
+   ```bash
+   ./scripts/pull-shared-config.sh
+   ```
+3. Après modification locale (via le dashboard ou un éditeur), renvoie les fichiers vers PC1 :
+   ```bash
+   ./scripts/push-shared-config.sh
+   ```
+
+Ces scripts utilisent `rsync` via SSH ; assure-toi que la commande `rsync` est disponible et que tu peux te connecter à PC1 (clé SSH ou mot de passe). Pense à relancer les HAProxy (`touch haproxy-*/runtime/reload.flag` ou `docker compose up -d haproxy-*`) après chaque synchronisation pour appliquer les changements.
 - `.env.pc*-example` → valeurs à mettre à jour lors du déplacement vers PC3.
 
 Ainsi, aucune modification de code supplémentaire n’est nécessaire le jour du basculement : seules les IP dans `.env` (et éventuellement l’entrée `extra_hosts`) sont à adapter.

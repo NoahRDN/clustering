@@ -4,6 +4,7 @@ services:
   # ----------------------------
   config-service:
     image: nginx:1.27
+    platform: linux/amd64
     container_name: config-service
     ports:
       - "${CONFIG_SERVICE_PORT:-8088}:80"
@@ -18,6 +19,7 @@ services:
   # ----------------------------
   haproxy-web:
     image: haproxy:2.9
+    platform: linux/amd64
     container_name: haproxy-web
     ports:
       - "8080:8080"
@@ -33,7 +35,7 @@ services:
       - public_net
       - private_net
     extra_hosts:
-      - "pc3-web2=${WEB2_REMOTE_IP:-172.20.10.4}"  # PC1 simule PC3 → remplacer par l'IP du vrai PC3 plus tard
+      - "pc3-web2=${WEB2_REMOTE_IP:-172.20.10.4}"
     environment:
       HAPROXY_CONFIG_URL: ${HAPROXY_WEB_CONFIG_URL:-http://config-service/haproxy-web.cfg}
     command: ["/bin/bash", "/docker-entrypoint-custom.sh"]
@@ -43,10 +45,11 @@ services:
   # ----------------------------
   haproxy-db:
     image: haproxy:2.9
+    platform: linux/amd64
     container_name: haproxy-db
     ports:
-      - "3307:3307"      # HAProxy écoute pour MySQL
-      - "8405:8405"      # page de stats DB
+      - "3307:3307"
+      - "8405:8405"
     volumes:
       - ./haproxy-db/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
       - ./haproxy-db/runtime:/var/run/haproxy
@@ -57,7 +60,7 @@ services:
     networks:
       - private_net
     extra_hosts:
-      - "pc2-mysql1=${MYSQL1_REMOTE_IP:-172.20.10.2}" # IP de mysql1 (hébergé sur PC2)
+      - "pc2-mysql1=${MYSQL1_REMOTE_IP:-172.20.10.2}"
     environment:
       HAPROXY_CONFIG_URL: ${HAPROXY_DB_CONFIG_URL:-http://config-service/haproxy-db.cfg}
     command: ["/bin/bash", "/docker-entrypoint-custom.sh"]
@@ -67,6 +70,7 @@ services:
   # ----------------------------
   web1:
     image: php:8.2-apache
+    platform: linux/amd64
     container_name: web1
     volumes:
       - ./web/web1:/var/www/html
@@ -82,6 +86,7 @@ services:
 
   web2:
     image: php:8.2-apache
+    platform: linux/amd64
     container_name: web2
     volumes:
       - ./web/web2:/var/www/html
@@ -99,6 +104,7 @@ services:
 
   web-dashboard:
     image: php:8.2-apache
+    platform: linux/amd64
     container_name: web-dashboard
     ports:
       - "8090:80"
@@ -116,6 +122,7 @@ services:
 
   web3:
     image: php:8.2-apache
+    platform: linux/amd64
     container_name: web3
     volumes:
       - ./web/web3:/var/www/html
@@ -130,10 +137,11 @@ services:
       bash -c "docker-php-ext-install pdo pdo_mysql && apache2-foreground"
 
   # ----------------------------
-  # 🔹 Deux bases de données MySQL (master-master)
+  # 🔹 Bases de données MySQL (master-master)
   # ----------------------------
   mysql1:
     image: mysql:8.0
+    platform: linux/amd64
     container_name: mysql1
     environment:
       MYSQL_ROOT_PASSWORD: root
@@ -150,6 +158,7 @@ services:
 
   mysql2:
     image: mysql:8.0
+    platform: linux/amd64
     container_name: mysql2
     environment:
       MYSQL_ROOT_PASSWORD: root
@@ -164,6 +173,7 @@ services:
 
   mysql3:
     image: mysql:8.0
+    platform: linux/amd64
     container_name: mysql3
     environment:
       MYSQL_ROOT_PASSWORD: root
@@ -176,11 +186,12 @@ services:
     networks:
       - private_net
 
-  # -----------------------------------------------------
-  # 🔹 Service d’initialisation automatique de la réplication
-  # -----------------------------------------------------
+  # ----------------------------
+  # 🔹 Service d’initialisation de la réplication
+  # ----------------------------
   replication-init:
     image: mysql:8.0
+    platform: linux/amd64
     container_name: replication-init
     depends_on:
       - mysql1
@@ -197,7 +208,6 @@ services:
       MYSQL2_HOST: ${MYSQL2_HOST:-mysql2}
       MYSQL2_PORT: ${MYSQL2_PORT:-3306}
     entrypoint: ["/bin/sh", "/scripts/setup-replication.sh"]
-
 
 networks:
   public_net:

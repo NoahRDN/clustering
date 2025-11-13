@@ -87,7 +87,7 @@ if ($editDbName !== '') {
             padding: 24px;
         }
         .dashboard {
-            width: min(920px, 100%);
+            width: min(1100px, 100%);
             background: #ffffff;
             border: 2px solid rgba(17, 66, 255, 0.15);
             border-radius: 18px;

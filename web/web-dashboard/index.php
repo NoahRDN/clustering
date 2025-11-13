@@ -101,6 +101,18 @@ if ($editDbName !== '') {
             align-items: center;
             margin-bottom: 16px;
         }
+        .dashboard-actions a.stats-link {
+            border-radius: 999px;
+            padding: 10px 18px;
+            font-weight: 600;
+            text-decoration: none;
+            color: #0b2c78;
+            border: 1px solid rgba(14, 51, 120, 0.2);
+            background: #eef2ff;
+        }
+        .dashboard-actions a.stats-link:hover {
+            background: #dbe3ff;
+        }
         h1 {
             margin: 0 0 16px;
             font-size: 28px;
@@ -273,6 +285,8 @@ if ($editDbName !== '') {
                 <input type="hidden" name="form_type" value="refresh_dashboard">
                 <button type="submit" class="primary">🔄 Rafraîchir les statuts</button>
             </form>
+            <a class="stats-link" href="http://localhost:8404/stats" target="_blank" rel="noopener noreferrer">📊 Stats HAProxy Web</a>
+            <a class="stats-link" href="http://localhost:8405/stats" target="_blank" rel="noopener noreferrer">📊 Stats HAProxy DB</a>
             <span class="runtime-info">
                 <?php if (is_array($runtimeSnapshot) && !empty($runtimeSnapshot['generated_at'])): ?>
                     Dernière lecture runtime&nbsp;: <?= date('d/m/Y H:i:s', (int) $runtimeSnapshot['generated_at']) ?>
@@ -488,7 +502,7 @@ if ($editDbName !== '') {
                         <td>
                             <div class="row-actions">
                                 <a href="?edit_db=<?= urlencode($db['name']) ?>#db-form">Modifier</a>
-                                <!-- <form method="post" action="db-actions.php">
+                                <form method="post" action="db-actions.php">
                                     <input type="hidden" name="form_type" value="db_action">
                                     <input type="hidden" name="action" value="delete">
                                     <input type="hidden" name="server" value="<?= htmlspecialchars($db['name']) ?>">
@@ -499,7 +513,7 @@ if ($editDbName !== '') {
                                     <input type="hidden" name="action" value="refresh">
                                     <input type="hidden" name="server" value="<?= htmlspecialchars($db['name']) ?>">
                                     <button type="submit">Rafraîchir état</button>
-                                </form> -->
+                                </form>
                                 <form method="post" action="db-actions.php">
                                     <input type="hidden" name="form_type" value="db_action">
                                     <input type="hidden" name="action" value="restart">

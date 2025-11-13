@@ -93,6 +93,7 @@ services:
     container_name: web3
     volumes:
       - ./web/web3:/var/www/html
+      - ./web/shared:/var/www/shared
     depends_on:
       - haproxy-db
     networks:

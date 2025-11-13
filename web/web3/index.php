@@ -1,153 +1,152 @@
 <?php
-$logicalName  = gethostname();
-$serverIp     = $_SERVER['SERVER_ADDR'] ?? gethostbyname($logicalName);
-$clientIp     = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? ($_SERVER['REMOTE_ADDR'] ?? 'Inconnue');
-$hostHeader   = $_SERVER['HTTP_HOST'] ?? 'Non précisé';
-$protocol     = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$requestUri   = $_SERVER['REQUEST_URI'] ?? '/';
-$httpMethod   = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-$userAgent    = $_SERVER['HTTP_USER_AGENT'] ?? 'Non précisé';
-$serverPort   = $_SERVER['SERVER_PORT'] ?? 'N/A';
-$requestTime  = date('Y-m-d H:i:s', $_SERVER['REQUEST_TIME'] ?? time());
-$fullUrl      = $hostHeader !== 'Non précisé' ? sprintf('%s://%s%s', $protocol, $hostHeader, $requestUri) : $requestUri;
-$forwardChain = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? null;
-$requestHash  = substr(hash('sha1', implode('|', [$clientIp, $logicalName, $requestTime, $httpMethod, $requestUri])), 0, 12);
+session_start();
+
+require_once __DIR__ . '/../shared/session_activity.php';
+
+function formatSessionValue(mixed $value): string
+{
+    if (is_scalar($value) || $value === null) {
+        return (string) $value;
+    }
+
+    return trim(json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+}
+
+$server     = gethostname();
+$remoteAddr = $_SERVER['REMOTE_ADDR'] ?? 'inconnue';
+$userAgent  = $_SERVER['HTTP_USER_AGENT'] ?? 'Inconnu';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $favorite = trim($_POST['color'] ?? '');
+    $_SESSION['favorite_color'] = $favorite;
+
+    sessionActivityRecord($server, $remoteAddr, $favorite, [
+        'user_agent' => $userAgent,
+        'path'       => $_SERVER['REQUEST_URI'] ?? '/',
+        'method'     => $_SERVER['REQUEST_METHOD'] ?? 'GET',
+    ]);
+}
+
+$visitorActivity = sessionActivityList($server);
+$sessionSnapshot = $_SESSION;
 ?>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="utf-8">
-    <title>Test de connexion - <?= htmlspecialchars($logicalName, ENT_QUOTES, 'UTF-8') ?></title>
-    <style>
-        :root {
-            color-scheme: light;
-            font-family: "Segoe UI", Arial, sans-serif;
-        }
-        body {
-            margin: 0;
-            padding: 32px;
-            background: linear-gradient(135deg, #e1ebff, #fefefe);
-            color: #0f172a;
-        }
-        .container {
-            max-width: 920px;
-            margin: auto;
-            background: #fff;
-            border-radius: 20px;
-            padding: 32px;
-            box-shadow: 0 25px 60px rgba(15, 23, 42, 0.15);
-        }
-        h1 {
-            margin-top: 0;
-            font-size: 28px;
-            color: #0c3ebc;
-        }
-        .lead { margin-bottom: 24px; color: #475569; }
-        .badges {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 16px;
-        }
-        .badge {
-            padding: 16px;
-            border-radius: 16px;
-            background: #eff4ff;
-            border: 1px solid rgba(37, 99, 235, 0.2);
-        }
-        .badge span {
-            display: block;
-            font-size: 12px;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            color: #475569;
-            margin-bottom: 6px;
-        }
-        .badge strong {
-            font-size: 20px;
-            color: #0f172a;
-        }
-        .details {
-            margin-top: 28px;
-            border-radius: 18px;
-            border: 1px solid rgba(15, 23, 42, 0.1);
-            padding: 0;
-            overflow: hidden;
-            list-style: none;
-        }
-        .details li {
-            display: flex;
-            justify-content: space-between;
-            padding: 14px 20px;
-            border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-        }
-        .details li:last-child { border-bottom: none; }
-        .details span {
-            font-weight: 600;
-            color: #1d2a5b;
-        }
-        .details code {
-            background: #0f172a;
-            color: #e2e8f0;
-            padding: 3px 6px;
-            border-radius: 6px;
-        }
-        .muted { color: #64748b; font-size: 14px; margin-top: 6px; }
-    </style>
+<meta charset="utf-8">
+<title>Session locale - <?= htmlspecialchars($server) ?></title>
+<style>
+body { font-family: Arial, sans-serif; padding: 20px; background: #f5f7ff; color: #10172a; }
+form, .panel { background: #fff; padding: 16px; border-radius: 12px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); margin-bottom: 20px; }
+label { display: block; font-weight: bold; margin-bottom: 8px; }
+input[type="text"] { padding: 8px 10px; border-radius: 8px; border: 1px solid #d0d7ee; width: 100%; max-width: 320px; }
+button { margin-top: 10px; padding: 10px 18px; border-radius: 999px; border: none; background: #2563eb; color: white; font-weight: bold; cursor: pointer; }
+table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+th, td { padding: 10px; border-bottom: 1px solid #e2e8f0; text-align: left; font-size: 14px; }
+th { text-transform: uppercase; font-size: 12px; letter-spacing: 0.05em; color: #475569; }
+.empty { font-style: italic; color: #64748b; }
+.actions { display: flex; gap: 12px; margin-bottom: 20px; }
+.actions button { margin-top: 0; background: #0f172a; }
+.history-list { margin: 0; padding-left: 18px; }
+.history-list li { margin-bottom: 4px; font-size: 13px; }
+.history-list time { display: inline-block; min-width: 130px; color: #475569; }
+.session-data { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.session-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; }
+.session-key { font-weight: 600; min-width: 120px; color: #0f172a; }
+.session-value { font-family: "Fira Code", Menlo, Consolas, monospace; background: #0f172a; color: #e2e8f0; padding: 6px 8px; border-radius: 8px; flex: 1; white-space: pre-wrap; }
+</style>
 </head>
-<body>
-<div class="container">
-    <h1>Test de connexion</h1>
-    <p class="lead">Cette page confirme que l’instance répond correctement derrière HAProxy.</p>
+<body style="font-family: Arial; padding: 20px;">
+<h1>Serveur <strong><?= htmlspecialchars($server) ?></strong></h1>
+<p>Adresse IP: <strong><?= htmlspecialchars($remoteAddr) ?></strong></p>
 
-    <div class="badges">
-        <div class="badge">
-            <span>Nom logique</span>
-            <strong><?= htmlspecialchars($logicalName, ENT_QUOTES, 'UTF-8') ?></strong>
-        </div>
-        <div class="badge">
-            <span>IP du serveur</span>
-            <strong><?= htmlspecialchars($serverIp, ENT_QUOTES, 'UTF-8') ?></strong>
-        </div>
-        <div class="badge">
-            <span>IP cliente</span>
-            <strong><?= htmlspecialchars($clientIp, ENT_QUOTES, 'UTF-8') ?></strong>
-        </div>
-    </div>
-
-    <ul class="details">
-        <li>
-            <span>URL appelée</span>
-            <div><?= htmlspecialchars($fullUrl, ENT_QUOTES, 'UTF-8') ?></div>
-        </li>
-        <li>
-            <span>Méthode HTTP</span>
-            <div><?= htmlspecialchars($httpMethod, ENT_QUOTES, 'UTF-8') ?></div>
-        </li>
-        <li>
-            <span>Port du backend</span>
-            <div><?= htmlspecialchars((string) $serverPort, ENT_QUOTES, 'UTF-8') ?></div>
-        </li>
-        <li>
-            <span>User Agent</span>
-            <div><?= htmlspecialchars($userAgent, ENT_QUOTES, 'UTF-8') ?></div>
-        </li>
-        <li>
-            <span>Date locale</span>
-            <div><?= htmlspecialchars($requestTime, ENT_QUOTES, 'UTF-8') ?></div>
-        </li>
-        <li>
-            <span>Empreinte requête</span>
-            <div><code><?= htmlspecialchars($requestHash, ENT_QUOTES, 'UTF-8') ?></code></div>
-        </li>
-        <?php if ($forwardChain): ?>
-        <li>
-            <span>X-Forwarded-For</span>
-            <div><?= htmlspecialchars($forwardChain, ENT_QUOTES, 'UTF-8') ?></div>
-        </li>
-        <?php endif; ?>
-    </ul>
-
-    <p class="muted">Besoin d’un diagnostic supplémentaire ? Comparez l’adresse IP logique avec la cible attendue dans HAProxy et surveillez les en-têtes transmis.</p>
+<div class="actions">
+    <form method="get">
+        <button type="submit">Rafraîchir la page</button>
+    </form>
+    <button type="button" class="clear-client-state">Effacer les cookies (test)</button>
 </div>
+
+<form method="post">
+  <label>Ta couleur préférée :
+    <input type="text" name="color" value="<?= $_SESSION['favorite_color'] ?? '' ?>">
+  </label>
+  <button type="submit">Enregistrer</button>
+</form>
+
+<div class="panel">
+    <h2>Session actuelle</h2>
+    <?php if ($sessionSnapshot): ?>
+        <div class="session-data">
+            <?php foreach ($sessionSnapshot as $key => $value): ?>
+                <div class="session-row">
+                    <span class="session-key"><?= htmlspecialchars((string) $key) ?></span>
+                    <span class="session-value"><?= htmlspecialchars(formatSessionValue($value)) ?></span>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php else: ?>
+        <p class="empty">Aucune donnée de session enregistrée pour le moment.</p>
+    <?php endif; ?>
+</div>
+
+<div class="panel">
+    <h2>Historique des visiteurs</h2>
+    <?php if ($visitorActivity): ?>
+        <table>
+            <thead>
+                <tr>
+                    <th>Adresse IP</th>
+                    <th>Historique des valeurs</th>
+                    <th>Dernière mise à jour</th>
+                    <th>Visites</th>
+                    <th>User Agent</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($visitorActivity as $entry): ?>
+                <tr>
+                    <td><?= htmlspecialchars($entry['ip'] ?? 'N/A') ?></td>
+                    <td>
+                        <?php
+                            $historyItems = array_slice($entry['history'] ?? [], 0, 5);
+                        ?>
+                        <?php if ($historyItems): ?>
+                            <ul class="history-list">
+                            <?php foreach ($historyItems as $item): ?>
+                                <li>
+                                    <time><?= isset($item['timestamp']) ? date('Y-m-d H:i:s', (int)$item['timestamp']) : '—' ?></time>
+                                    <?= htmlspecialchars($item['value'] ?? '—') ?>
+                                </li>
+                            <?php endforeach; ?>
+                            </ul>
+                        <?php else: ?>
+                            <span class="empty">Aucune valeur enregistrée.</span>
+                        <?php endif; ?>
+                    </td>
+                    <td><?= isset($entry['last_update']) ? date('Y-m-d H:i:s', (int) $entry['last_update']) : '—' ?></td>
+                    <td><?= (int) ($entry['hits'] ?? 0) ?></td>
+                    <td><?= htmlspecialchars($entry['meta']['user_agent'] ?? 'N/A') ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    <?php else: ?>
+        <p class="empty">Aucune modification enregistrée pour le moment.</p>
+    <?php endif; ?>
+</div>
+
 </body>
+<script>
+document.querySelectorAll('.clear-client-state').forEach(function(btn) {
+    btn.addEventListener('click', function () {
+        ['SRV', 'PHPSESSID'].forEach(function (cookieName) {
+            document.cookie = cookieName + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+        });
+        try { localStorage.clear(); } catch (e) {}
+        try { sessionStorage.clear(); } catch (e) {}
+        window.location.reload();
+    });
+});
+</script>
 </html>

@@ -3,10 +3,9 @@
 declare(strict_types=1);
 
 /**
- * Store per-server visitor activity in a simple JSON file inside the temp dir.
- *
- * Each entry is keyed by IP address so that we can easily show the full history
- * of submitted values alongside helper metadata.
+ * Stocke l’activité (par scope de session) dans un fichier JSON commun aux
+ * différents serveurs web. Chaque entrée est indexée par adresse IP pour
+ * conserver un petit historique côté UI.
  */
 
 function sessionActivityRecord(string $serverName, string $ipAddress, ?string $newValue, array $meta = []): void
@@ -97,13 +96,34 @@ function sessionActivityList(string $serverName): array
     return $entries;
 }
 
-function sessionActivityPath(string $serverName): string
+function sessionActivityBaseDir(): string
 {
-    $base = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'haproxy_session_activity';
-    if (!is_dir($base)) {
-        mkdir($base, 0777, true);
+    static $resolved = null;
+    if ($resolved !== null) {
+        return $resolved;
     }
 
+    $sharedStore = __DIR__ . DIRECTORY_SEPARATOR . 'session_activity_store';
+    if (ensureDirectory($sharedStore)) {
+        return $resolved = $sharedStore;
+    }
+
+    $fallback = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'haproxy_session_activity';
+    ensureDirectory($fallback);
+    return $resolved = $fallback;
+}
+
+function ensureDirectory(string $path): bool
+{
+    if (is_dir($path)) {
+        return true;
+    }
+
+    return @mkdir($path, 0777, true);
+}
+
+function sessionActivityPath(string $serverName): string
+{
     $safeName = preg_replace('/[^a-z0-9_.-]/i', '_', $serverName);
-    return $base . DIRECTORY_SEPARATOR . $safeName . '.json';
+    return sessionActivityBaseDir() . DIRECTORY_SEPARATOR . $safeName . '.json';
 }

@@ -5,6 +5,8 @@ const DB_BACKEND  = 'mysql_back';
 function buildDashboardContext(): array
 {
     $projectRoot = dirname(__DIR__, 2);
+    error_log("dirname: " . dirname(__DIR__ ));
+    error_log("Project root: " . $projectRoot);
     return [
         'project_root'    => $projectRoot,
         'web_cfg'         => resolveFirstExisting([
@@ -337,6 +339,7 @@ function handleDatabaseForm(array $ctx, array $data): void
         'role'          => 'Master-Master',
         'gtid'          => $gtid,
         'health_check'  => true,
+        'backup'        => true, // nouvelles instances DB en backup par défaut
     ];
 
     if ($operation === 'update') {
@@ -821,6 +824,7 @@ function updateDatabaseServerEntry(string $path, array $payload, string $origina
         $definition['gtid']   = $payload['gtid'];
         $definition['disabled'] = !empty($definition['disabled']);
         $definition['health_check'] = true;
+        $definition['backup'] = !empty($definition['backup']);
         $line = buildDatabaseServerLine($definition);
         return $indent . $line;
     });
@@ -844,6 +848,9 @@ function buildDatabaseServerLine(array $definition): string
     ];
     if (!empty($definition['health_check'])) {
         $parts[] = 'check';
+    }
+    if (!empty($definition['backup'])) {
+        $parts[] = 'backup';
     }
     if (!empty($definition['disabled'])) {
         $parts[] = 'disabled';
@@ -915,6 +922,7 @@ function parseDatabaseServerDefinition(string $line): ?array
         'gtid_label'    => $gtid,
         'health_check'  => hasFlag($parts, 'check'),
         'disabled'      => hasFlag($parts, 'disabled'),
+        'backup'        => hasFlag($parts, 'backup'),
     ];
 }
 
@@ -971,6 +979,7 @@ function parseDatabaseServers(?string $path): array
             'gtid_bool'   => $definition['gtid'],
             'disabled'    => $definition['disabled'],
             'health_check'=> $definition['health_check'],
+            'backup'      => $definition['backup'],
             'last_check'  => '—',
         ];
     }
@@ -1099,8 +1108,8 @@ function defaultWebServers(): array
 function defaultDatabaseServers(): array
 {
     return [
-        ['name' => 'mysql1', 'ip' => '192.168.1.10', 'port' => '3306', 'status' => 'OK', 'role' => 'Master-Master', 'role_raw' => 'Master-Master', 'gtid' => 'ON', 'gtid_bool' => true, 'last_check' => '—', 'disabled' => false, 'health_check' => true],
-        ['name' => 'mysql2', 'ip' => '192.168.1.11', 'port' => '3306', 'status' => 'OK', 'role' => 'Master-Master', 'role_raw' => 'Master-Master', 'gtid' => 'ON', 'gtid_bool' => true, 'last_check' => '—', 'disabled' => false, 'health_check' => true],
+        ['name' => 'mysql1', 'ip' => '192.168.1.10', 'port' => '3306', 'status' => 'OK', 'role' => 'Master-Master', 'role_raw' => 'Master-Master', 'gtid' => 'ON', 'gtid_bool' => true, 'last_check' => '—', 'disabled' => false, 'health_check' => true, 'backup' => false],
+        ['name' => 'mysql2', 'ip' => '192.168.1.11', 'port' => '3306', 'status' => 'OK', 'role' => 'Master-Master', 'role_raw' => 'Master-Master', 'gtid' => 'ON', 'gtid_bool' => true, 'last_check' => '—', 'disabled' => false, 'health_check' => true, 'backup' => true],
     ];
 }
 

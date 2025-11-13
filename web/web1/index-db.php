@@ -4,6 +4,11 @@ require_once __DIR__ . '/../shared/session_activity.php';
 
 initAppSession(true);
 
+const DATA_SCOPE_SESSION = 'session';
+const DATA_SCOPE_GLOBAL  = 'global';
+const DATA_SCOPE_COOKIE  = 'SESSION_DATA_SCOPE';
+const GLOBAL_PREF_KEY    = 'favorite_color';
+
 function formatSessionValue(mixed $value): string
 {
     if (is_scalar($value) || $value === null) {
@@ -13,34 +18,79 @@ function formatSessionValue(mixed $value): string
     return trim(json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 }
 
-$server       = gethostname();
-$sessionId    = session_id() ?: '—';
-$sessionScope = $sessionId ?: 'session';
-$remoteAddr   = $_SERVER['REMOTE_ADDR'] ?? 'inconnue';
-$userAgent    = $_SERVER['HTTP_USER_AGENT'] ?? 'Inconnu';
+function loadGlobalPreference(PDO $pdo, string $key): ?string
+{
+    $stmt = $pdo->prepare('SELECT pref_value FROM global_preferences WHERE pref_key = :key');
+    $stmt->execute(['key' => $key]);
+    $value = $stmt->fetchColumn();
+    return $value === false ? null : (string) $value;
+}
 
-$incomingColor = $_POST['color'] ?? $_GET['color'] ?? null;
-$shouldProcess = ($_SERVER['REQUEST_METHOD'] === 'POST' && $incomingColor !== null) || (isset($_GET['color']));
+function saveGlobalPreference(PDO $pdo, string $key, string $value): void
+{
+    $stmt = $pdo->prepare(
+        'INSERT INTO global_preferences (pref_key, pref_value) VALUES (:key, :value)
+         ON DUPLICATE KEY UPDATE pref_value = VALUES(pref_value), updated_at = CURRENT_TIMESTAMP'
+    );
+    $stmt->execute(['key' => $key, 'value' => $value]);
+}
 
-if ($shouldProcess) {
-    $favorite = trim((string) $incomingColor);
-    $_SESSION['favorite_color'] = $favorite;
+$dsn = 'mysql:host=haproxy-db;port=3307;dbname=clustering;charset=utf8mb4';
+$pdo = new PDO($dsn, 'root', 'root', [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
-    sessionActivityRecord($sessionScope, $remoteAddr, $favorite, [
+$scope = $_COOKIE[DATA_SCOPE_COOKIE] ?? DATA_SCOPE_SESSION;
+if (!in_array($scope, [DATA_SCOPE_SESSION, DATA_SCOPE_GLOBAL], true)) {
+    $scope = DATA_SCOPE_SESSION;
+}
+
+if (!empty($_GET['scope_mode']) && in_array($_GET['scope_mode'], [DATA_SCOPE_SESSION, DATA_SCOPE_GLOBAL], true)) {
+    $scope = $_GET['scope_mode'];
+    setcookie(DATA_SCOPE_COOKIE, $scope, time() + 365 * 24 * 60 * 60, '/');
+    $redirectTarget = strtok($_SERVER['REQUEST_URI'] ?? 'index-db.php', '?') ?: 'index-db.php';
+    header('Location: ' . $redirectTarget);
+    exit;
+}
+
+$server     = gethostname();
+$sessionId  = session_id() ?: '—';
+$remoteAddr = $_SERVER['REMOTE_ADDR'] ?? 'inconnue';
+$userAgent  = $_SERVER['HTTP_USER_AGENT'] ?? 'Inconnu';
+$historyKey = $scope === DATA_SCOPE_GLOBAL ? 'global_preference' : ($sessionId ?: 'session');
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && array_key_exists('color', $_POST)) {
+    $favorite = trim((string)($_POST['color'] ?? ''));
+
+    if ($scope === DATA_SCOPE_GLOBAL) {
+        saveGlobalPreference($pdo, GLOBAL_PREF_KEY, $favorite);
+    } else {
+        $_SESSION['favorite_color'] = $favorite;
+    }
+
+    sessionActivityRecord($historyKey, $remoteAddr, $favorite, [
         'user_agent' => $userAgent,
         'path'       => $_SERVER['REQUEST_URI'] ?? '/',
         'method'     => $_SERVER['REQUEST_METHOD'] ?? 'GET',
+        'scope'      => $scope,
     ]);
 
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        header("Location: ?");
-        exit;
-    }
+    $redirectTarget = strtok($_SERVER['REQUEST_URI'] ?? 'index-db.php', '?') ?: 'index-db.php';
+    header('Location: ' . $redirectTarget);
+    exit;
 }
 
-$visitorActivity = sessionActivityList($sessionScope);
+if ($scope === DATA_SCOPE_GLOBAL) {
+    $favoriteValue = loadGlobalPreference($pdo, GLOBAL_PREF_KEY) ?? '';
+} else {
+    $favoriteValue = $_SESSION['favorite_color'] ?? '';
+}
+
+$visitorActivity = sessionActivityList($historyKey);
 $sessionSnapshot = $_SESSION;
 $shortSessionId  = strlen($sessionId) > 12 ? substr($sessionId, 0, 12) . '…' : $sessionId;
+$scopeLabel      = $scope === DATA_SCOPE_GLOBAL ? 'Mode global (valeur unique pour tous)' : 'Mode session (valeur isolée)';
+$scopeHint       = $scope === DATA_SCOPE_GLOBAL
+    ? 'Toute mise à jour est visible immédiatement par chaque navigateur.'
+    : 'La valeur est stockée dans la session PHP de ce navigateur.';
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -94,8 +144,8 @@ $shortSessionId  = strlen($sessionId) > 12 ? substr($sessionId, 0, 12) . '…' :
     }
     .chip-stack {
         display: flex;
-        gap: 8px;
         flex-wrap: wrap;
+        gap: 8px;
     }
     .chip {
         padding: 8px 14px;
@@ -105,11 +155,30 @@ $shortSessionId  = strlen($sessionId) > 12 ? substr($sessionId, 0, 12) . '…' :
         font-size: 13px;
         color: #0f3272;
     }
+    .scope-toggle {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 18px 0 0;
+        align-items: center;
+    }
+    .scope-toggle span { font-weight: 600; color: #1a2c55; }
+    .scope-btn {
+        border-radius: 999px;
+        padding: 8px 16px;
+        font-weight: 600;
+        text-decoration: none;
+        border: 1px solid rgba(11, 35, 82, 0.2);
+        color: #0d2d6b;
+        background: #eef2ff;
+    }
+    .scope-btn.active { background: #1b4fd7; color: #fff; border-color: #153ca5; }
+
     .stats-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
         gap: 16px;
-        margin-bottom: 24px;
+        margin: 24px 0;
     }
     .stat-card {
         padding: 16px;
@@ -125,17 +194,7 @@ $shortSessionId  = strlen($sessionId) > 12 ? substr($sessionId, 0, 12) . '…' :
         color: #5d6c8b;
         margin-bottom: 6px;
     }
-    .stat-card strong {
-        font-size: 18px;
-        color: #0b2351;
-    }
-    code.inline {
-        background: #101828;
-        color: #e2e8f0;
-        padding: 2px 6px;
-        border-radius: 6px;
-        font-size: 12px;
-    }
+    .stat-card strong { font-size: 18px; color: #0b2351; }
     .actions {
         display: flex;
         flex-wrap: wrap;
@@ -164,26 +223,15 @@ $shortSessionId  = strlen($sessionId) > 12 ? substr($sessionId, 0, 12) . '…' :
         border: 1px solid rgba(20, 59, 145, 0.08);
         margin-bottom: 24px;
     }
-    .panel h2 {
-        margin: 0 0 8px;
-        font-size: 20px;
-        color: #10224d;
-    }
-    .panel p.description {
-        margin: 0 0 18px;
-        color: #5a6785;
-    }
+    .panel h2 { margin: 0 0 8px; font-size: 20px; color: #10224d; }
+    .panel p.description { margin: 0 0 18px; color: #5a6785; }
     .form-layout {
         display: flex;
         flex-wrap: wrap;
         gap: 16px;
         align-items: flex-end;
     }
-    label {
-        font-size: 14px;
-        font-weight: 600;
-        color: #19294f;
-    }
+    label { font-size: 14px; font-weight: 600; color: #19294f; }
     input[type="text"] {
         width: min(320px, 100%);
         border-radius: 12px;
@@ -206,11 +254,7 @@ $shortSessionId  = strlen($sessionId) > 12 ? substr($sessionId, 0, 12) . '…' :
         background: #fff;
         border: 1px solid rgba(16, 39, 90, 0.08);
     }
-    .session-key {
-        font-weight: 700;
-        color: #0c2a64;
-        min-width: 120px;
-    }
+    .session-key { font-weight: 700; color: #0c2a64; min-width: 120px; }
     .session-value {
         font-family: "Fira Code", Menlo, Consolas, monospace;
         background: #0f172a;
@@ -243,19 +287,9 @@ $shortSessionId  = strlen($sessionId) > 12 ? substr($sessionId, 0, 12) . '…' :
         align-items: baseline;
         margin-bottom: 10px;
     }
-    .ip-tag {
-        font-weight: 600;
-        color: #0d254f;
-    }
-    .hits {
-        color: #64748b;
-        font-size: 13px;
-    }
-    .history-items {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
+    .ip-tag { font-weight: 600; color: #0d254f; }
+    .hits { color: #64748b; font-size: 13px; }
+    .history-items { display: flex; flex-direction: column; gap: 8px; }
     .history-row {
         display: flex;
         flex-wrap: wrap;
@@ -263,19 +297,9 @@ $shortSessionId  = strlen($sessionId) > 12 ? substr($sessionId, 0, 12) . '…' :
         align-items: center;
         font-size: 14px;
     }
-    .history-row time {
-        font-family: "Fira Code", monospace;
-        color: #475569;
-    }
-    .history-value {
-        font-weight: 600;
-        color: #0f172a;
-    }
-    .empty-state {
-        margin: 0;
-        color: #687898;
-        font-style: italic;
-    }
+    .history-row time { font-family: "Fira Code", monospace; color: #475569; }
+    .history-value { font-weight: 600; color: #0f172a; }
+    .empty-state { margin: 0; color: #687898; font-style: italic; }
     @media (max-width: 600px) {
         .app-shell { padding: 24px 18px; }
         .hero h1 { font-size: 24px; }
@@ -290,13 +314,22 @@ $shortSessionId  = strlen($sessionId) > 12 ? substr($sessionId, 0, 12) . '…' :
                 <p class="eyebrow">Sessions partagées</p>
                 <h1>Observatoire des sessions en base</h1>
                 <p class="subtitle">
-                    <?= htmlspecialchars($server) ?> persiste les sessions dans MySQL via HAProxy.
-                    Les valeurs affichées ici sont accessibles depuis tous les noeuds web.
+                    <?= htmlspecialchars($server) ?> peut stocker la couleur soit dans la session PHP, soit dans
+                    une préférence globale partagée par l’ensemble des clients.
                 </p>
+                <div class="scope-toggle">
+                    <span>Source de stockage :</span>
+                    <a class="scope-btn <?= $scope === DATA_SCOPE_SESSION ? 'active' : '' ?>" href="?scope_mode=session">
+                        Session individuelle
+                    </a>
+                    <a class="scope-btn <?= $scope === DATA_SCOPE_GLOBAL ? 'active' : '' ?>" href="?scope_mode=global">
+                        Valeur globale
+                    </a>
+                </div>
             </div>
             <div class="chip-stack">
                 <span class="chip">Session&nbsp;#<?= htmlspecialchars($shortSessionId) ?></span>
-                <span class="chip">Scope partagé</span>
+                <span class="chip">Mode&nbsp;: <?= htmlspecialchars($scope === DATA_SCOPE_GLOBAL ? 'Global' : 'Session') ?></span>
             </div>
         </div>
 
@@ -307,14 +340,14 @@ $shortSessionId  = strlen($sessionId) > 12 ? substr($sessionId, 0, 12) . '…' :
                 <p style="margin:6px 0 0; font-size:12px; color:#54617e;">User-Agent&nbsp;: <?= htmlspecialchars($userAgent) ?></p>
             </div>
             <div class="stat-card">
-                <span>Mode de session</span>
-                <strong>Base de données</strong>
-                <p style="margin:6px 0 0; font-size:12px; color:#54617e;">Handler personnalisé + table <code class="inline">sessions</code>.</p>
+                <span>Mode d'écriture</span>
+                <strong><?= htmlspecialchars($scopeLabel) ?></strong>
+                <p style="margin:6px 0 0; font-size:12px; color:#54617e;"><?= htmlspecialchars($scopeHint) ?></p>
             </div>
             <div class="stat-card">
-                <span>Dérnière valeur</span>
-                <strong><?= htmlspecialchars($_SESSION['favorite_color'] ?? '—') ?></strong>
-                <p style="margin:6px 0 0; font-size:12px; color:#54617e;">Synchronisée via HAProxy DB (port 3307).</p>
+                <span>Valeur suivie</span>
+                <strong><?= htmlspecialchars($favoriteValue !== '' ? $favoriteValue : '—') ?></strong>
+                <p style="margin:6px 0 0; font-size:12px; color:#54617e;">Champ «&nbsp;Couleur préférée&nbsp;»</p>
             </div>
         </div>
 
@@ -327,12 +360,17 @@ $shortSessionId  = strlen($sessionId) > 12 ? substr($sessionId, 0, 12) . '…' :
 
         <section class="panel">
             <h2>Couleur préférée</h2>
-            <p class="description">Cette valeur est stockée dans MySQL. Modifiez-la ici puis consultez web2 pour
-                valider la cohérence.</p>
+            <p class="description">
+                <?php if ($scope === DATA_SCOPE_GLOBAL): ?>
+                    La valeur est enregistrée dans la table <code>global_preferences</code> et partagée par tous les navigateurs.
+                <?php else: ?>
+                    La valeur est stockée dans la session PHP courante (identifiée via le handler en base).
+                <?php endif; ?>
+            </p>
             <form method="post" class="form-layout">
                 <label>
                     Valeur saisie
-                    <input type="text" name="color" value="<?= htmlspecialchars($_SESSION['favorite_color'] ?? '') ?>" placeholder="Ex. vert néon">
+                    <input type="text" name="color" value="<?= htmlspecialchars($favoriteValue) ?>" placeholder="Ex. vert néon">
                 </label>
                 <button type="submit" class="btn">Enregistrer</button>
             </form>
@@ -352,11 +390,22 @@ $shortSessionId  = strlen($sessionId) > 12 ? substr($sessionId, 0, 12) . '…' :
             <?php else: ?>
                 <p class="empty-state">Aucune donnée de session enregistrée pour le moment.</p>
             <?php endif; ?>
+            <?php if ($scope === DATA_SCOPE_GLOBAL): ?>
+                <div class="session-data" style="margin-top:16px;">
+                    <div class="session-row">
+                        <span class="session-key">favorite_color (global)</span>
+                        <span class="session-value"><?= htmlspecialchars($favoriteValue !== '' ? $favoriteValue : '—') ?></span>
+                    </div>
+                </div>
+            <?php endif; ?>
         </section>
 
         <section class="panel">
-            <h2>Historique de cette session</h2>
-            <p class="description">Indexé par ID de session, ce journal est identique depuis web1 ou web2.</p>
+            <h2>Historique de cette source</h2>
+            <p class="description">
+                Le suivi est indexé sur «&nbsp;<?= htmlspecialchars($historyKey) ?>&nbsp;». Les événements listés
+                sont donc communs à tous en mode global, ou spécifiques à cette session sinon.
+            </p>
             <?php if ($visitorActivity): ?>
                 <ul class="timeline">
                     <?php foreach ($visitorActivity as $entry): ?>
@@ -392,7 +441,7 @@ $shortSessionId  = strlen($sessionId) > 12 ? substr($sessionId, 0, 12) . '…' :
     <script>
     document.querySelectorAll('.clear-client-state').forEach(function(btn) {
         btn.addEventListener('click', function () {
-            ['SRV', 'PHPSESSID'].forEach(function (cookieName) {
+            ['SRV', 'PHPSESSID', 'SESSION_DATA_SCOPE'].forEach(function (cookieName) {
                 document.cookie = cookieName + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
             });
             try { localStorage.clear(); } catch (e) {}

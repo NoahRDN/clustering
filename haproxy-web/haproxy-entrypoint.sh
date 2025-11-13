@@ -12,10 +12,18 @@ if [[ -n "${EXTERNAL_RUNTIME}" ]]; then
   mkdir -p "${EXTERNAL_RUNTIME}" 2>/dev/null || true
 fi
 
-FLAG_FILES=("${RUNTIME_DIR}/reload.flag")
-if [[ -d "${EXTERNAL_RUNTIME}" ]]; then
-  FLAG_FILES+=("${EXTERNAL_RUNTIME}/reload.flag")
-fi
+FLAG_FILES=()
+add_flag_targets() {
+  local base="$1"
+  if [[ -z "${base}" || ! -d "${base}" ]]; then
+    return
+  fi
+  FLAG_FILES+=("${base}/reload.flag")
+  FLAG_FILES+=("${base}/restart.flag")
+}
+
+add_flag_targets "${RUNTIME_DIR}"
+add_flag_targets "${EXTERNAL_RUNTIME}"
 
 reload_haproxy() {
   local source="${1:-manual}"

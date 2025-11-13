@@ -339,7 +339,7 @@ function handleDatabaseForm(array $ctx, array $data): void
         'role'          => 'Master-Master',
         'gtid'          => $gtid,
         'health_check'  => true,
-        'backup'        => true, // nouvelles instances DB en backup par défaut
+        'backup'        => $operation === 'create' ? true : null,
     ];
 
     if ($operation === 'update') {
@@ -432,14 +432,25 @@ function requestHaProxyReload(?string $flag, string $label): void
         return;
     }
 
-    $dir = dirname($flag);
-    if (!is_dir($dir) || !is_writable($dir)) {
-        addFlash('warning', "Impossible de signaler le rechargement {$label} (répertoire inaccessible).");
-        return;
+    $targets = [$flag];
+    if (str_ends_with($flag, 'reload.flag')) {
+        $targets[] = substr($flag, 0, -strlen('reload.flag')) . 'restart.flag';
     }
 
-    if (@file_put_contents($flag, "reload\n") === false) {
-        addFlash('warning', "Rechargement {$label} non déclenché (écriture impossible).");
+    $success = false;
+    foreach ($targets as $target) {
+        $dir = dirname($target);
+        if (!is_dir($dir) || !is_writable($dir)) {
+            continue;
+        }
+        if (@file_put_contents($target, "reload\n") === false) {
+            continue;
+        }
+        $success = true;
+    }
+
+    if (!$success) {
+        addFlash('warning', "Impossible de signaler automatiquement le rechargement {$label} (droits ?).");
     }
 }
 
@@ -824,7 +835,11 @@ function updateDatabaseServerEntry(string $path, array $payload, string $origina
         $definition['gtid']   = $payload['gtid'];
         $definition['disabled'] = !empty($definition['disabled']);
         $definition['health_check'] = true;
-        $definition['backup'] = !empty($definition['backup']);
+        if (array_key_exists('backup', $payload) && $payload['backup'] !== null) {
+            $definition['backup'] = (bool) $payload['backup'];
+        } else {
+            $definition['backup'] = !empty($definition['backup']);
+        }
         $line = buildDatabaseServerLine($definition);
         return $indent . $line;
     });

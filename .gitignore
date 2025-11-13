@@ -1,0 +1,7 @@
+/haproxy-web/runtime/
+/haproxy-db/runtime/
+/haproxy-web/haproxy-runtime/
+/haproxy-db/haproxy-db-runtime/
+/web/shared/session_activity_store/
+/vendor/
+/node_modules/

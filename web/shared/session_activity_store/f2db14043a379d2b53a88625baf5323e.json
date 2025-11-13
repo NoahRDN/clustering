@@ -1,0 +1,25 @@
+{
+    "172.18.0.11": {
+        "ip": "172.18.0.11",
+        "server": "f2db14043a379d2b53a88625baf5323e",
+        "hits": 1,
+        "last_value": "hola",
+        "last_update": 1763014296,
+        "meta": {
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+            "path": "/index-db.php",
+            "method": "POST"
+        },
+        "history": [
+            {
+                "value": "hola",
+                "timestamp": 1763014296,
+                "meta": {
+                    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+                    "path": "/index-db.php",
+                    "method": "POST"
+                }
+            }
+        ]
+    }
+}

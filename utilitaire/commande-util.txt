@@ -20,8 +20,13 @@ wsl dos2unix ./haproxy-db/haproxy-entrypoint.sh
 wsl chmod +x ./scripts/setup-replication.sh
 wsl chmod +x ./haproxy-web/haproxy-entrypoint.sh
 wsl chmod +x ./haproxy-db/haproxy-entrypoint.sh
+wsl chmod +x scripts/fix-mysql-perms.sh
 
 docker inspect web3 | Select-String -Pattern "ExposedPorts" -Context 0,5
 docker inspect -f "{{json .Config.ExposedPorts}}" web3
-
+3
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+
+
+sudo apt update
+sudo apt install make

@@ -2,14 +2,37 @@
 set -euo pipefail
 
 CONFIG="/usr/local/etc/haproxy/haproxy.cfg"
-PIDFILE="/var/run/haproxy/haproxy.pid"
-RUNTIME_DIR="/var/run/haproxy"
+PIDFILE="/var/run/haproxy/web/haproxy.pid"
+RUNTIME_DIR="/var/run/haproxy/web"
 EXTERNAL_RUNTIME="/haproxy-runtime"
 
-mkdir -p "${RUNTIME_DIR}" || true
-chmod 777 "${RUNTIME_DIR}" 2>/dev/null || true
+ensure_runtime_dir() {
+  local dir="$1"
+  if [[ -z "${dir}" ]]; then
+    return
+  fi
+  mkdir -p "${dir}" 2>/dev/null || true
+  # chown peut échouer si le FS ne le supporte pas (montage Windows par exemple)
+  chown haproxy:haproxy "${dir}" 2>/dev/null || true
+  chmod 770 "${dir}" 2>/dev/null || true
+}
+
+cleanup_socket() {
+  local dir="$1"
+  if [[ -z "${dir}" ]]; then
+    return
+  fi
+  local sock="${dir}/admin.sock"
+  if [[ -S "${sock}" ]]; then
+    rm -f "${sock}" 2>/dev/null || true
+  fi
+}
+
+ensure_runtime_dir "${RUNTIME_DIR}"
+cleanup_socket "${RUNTIME_DIR}"
 if [[ -n "${EXTERNAL_RUNTIME}" ]]; then
-  mkdir -p "${EXTERNAL_RUNTIME}" 2>/dev/null || true
+  ensure_runtime_dir "${EXTERNAL_RUNTIME}"
+  cleanup_socket "${EXTERNAL_RUNTIME}"
 fi
 
 FLAG_FILES=()

@@ -47,6 +47,10 @@ Cet environnement Docker illustre un mini-cluster complet :
 
 Deux boutons “Stats HAProxy Web” et “Stats HAProxy DB” sont disponibles dans l’interface pour accéder rapidement aux pages `/stats`.
 
+> ℹ️ Les services MySQL sont maintenant construits à partir de Dockerfiles (`mysql/mysql*/Dockerfile`) qui copient directement `my.cnf` dans l’image. Cela évite que MySQL ignore la configuration à cause des permissions Windows sur les volumes montés. Pensez à reconstruire les images (`docker compose build mysql1 mysql2 mysql3` ou `make up`) si vous modifiez ces fichiers.
+
+> ℹ️ Les services HAProxy construisent désormais leurs propres images (création de `/var/run/haproxy` appartenant à `haproxy:haproxy`). Le runtime admin passe par des ports internes (`haproxy-web` écoute sur `0.0.0.0:9999`, `haproxy-db` sur `0.0.0.0:10000`) et le dashboard s’y connecte directement en TCP (`tcp://haproxy-web:9999`, `tcp://haproxy-db:10000`). Les demandes de reload utilisent des volumes nommés (`haproxy_web_flags`, `haproxy_db_flags`) montés dans les conteneurs HAProxy et dashboard pour déposer les fichiers `reload.flag`. Après modification des fichiers `haproxy-*/haproxy.cfg` ou des entrypoints, relancez `docker compose up -d --build haproxy-web haproxy-db` puis `docker compose restart web-dashboard`.
+
 ---
 
 ### 4. Fonctionnement

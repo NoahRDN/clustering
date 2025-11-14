@@ -3,44 +3,40 @@ services:
   # 🔹 HAProxy pour les serveurs Web
   # ----------------------------
   haproxy-web:
-    image: haproxy:2.9
+    build:
+      context: ./haproxy-web
     container_name: haproxy-web
     ports:
       - "8080:8080"
       - "8404:8404"
     volumes:
       - ./haproxy-web/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
-      - ./haproxy-web/runtime:/var/run/haproxy
-      - ./haproxy-web/runtime:/haproxy-runtime
-      - ./haproxy-web/haproxy-entrypoint.sh:/docker-entrypoint-custom.sh:ro
+      - haproxy_web_flags:/haproxy-runtime
     depends_on:
       - web1
       - web2
     networks:
       - public_net
       - private_net
-    command: ["/bin/bash", "/docker-entrypoint-custom.sh"]
 
   # ----------------------------
   # 🔹 HAProxy pour la base de données
   # ----------------------------
   haproxy-db:
-    image: haproxy:2.9
+    build:
+      context: ./haproxy-db
     container_name: haproxy-db
     ports:
       - "3307:3307"      # HAProxy écoute pour MySQL
       - "8405:8405"      # page de stats DB
     volumes:
       - ./haproxy-db/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg
-      - ./haproxy-db/runtime:/var/run/haproxy
-      - ./haproxy-db/haproxy-entrypoint.sh:/docker-entrypoint-custom.sh:ro
-      - ./haproxy-db/runtime:/haproxy-db-runtime
+      - haproxy_db_flags:/haproxy-db-runtime
     depends_on:
       - mysql1
       - mysql2
     networks:
       - private_net
-    command: ["/bin/bash", "/docker-entrypoint-custom.sh"]
 
   # ----------------------------
   # 🔹 Serveurs web (PHP + Apache)
@@ -80,8 +76,8 @@ services:
       - ./web/web-dashboard:/var/www/html
       - ./haproxy-web:/data/haproxy-web
       - ./haproxy-db:/data/haproxy-db
-      - ./haproxy-web/runtime:/haproxy-runtime
-      - ./haproxy-db/runtime:/haproxy-db-runtime
+      - haproxy_web_flags:/haproxy-runtime
+      - haproxy_db_flags:/haproxy-db-runtime
     networks:
       - private_net
       - public_net
@@ -105,7 +101,8 @@ services:
   # 🔹 Deux bases de données MySQL (master-master)
   # ----------------------------
   mysql1:
-    image: mysql:8.0
+    build:
+      context: ./mysql/mysql1
     container_name: mysql1
     environment:
       MYSQL_ROOT_PASSWORD: root
@@ -113,13 +110,13 @@ services:
       MYSQL_REPLICATION_USER: repl
       MYSQL_REPLICATION_PASSWORD: replpass
     volumes:
-      - ./mysql/mysql1/my.cnf:/etc/mysql/conf.d/my.cnf
       - ./mysql/mysql1/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - private_net
 
   mysql2:
-    image: mysql:8.0
+    build:
+      context: ./mysql/mysql2
     container_name: mysql2
     environment:
       MYSQL_ROOT_PASSWORD: root
@@ -127,13 +124,13 @@ services:
       MYSQL_REPLICATION_USER: repl
       MYSQL_REPLICATION_PASSWORD: replpass
     volumes:
-      - ./mysql/mysql2/my.cnf:/etc/mysql/conf.d/my.cnf
       - ./mysql/mysql2/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - private_net
 
   mysql3:
-    image: mysql:8.0
+    build:
+      context: ./mysql/mysql3
     container_name: mysql3
     environment:
       MYSQL_ROOT_PASSWORD: root
@@ -141,7 +138,6 @@ services:
       MYSQL_REPLICATION_USER: repl
       MYSQL_REPLICATION_PASSWORD: replpass
     volumes:
-      - ./mysql/mysql3/my.cnf:/etc/mysql/conf.d/my.cnf
       - ./mysql/mysql3/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - private_net
@@ -165,3 +161,7 @@ services:
 networks:
   public_net:
   private_net:
+
+volumes:
+  haproxy_web_flags:
+  haproxy_db_flags:

@@ -17,16 +17,8 @@ function buildDashboardContext(): array
             '/data/haproxy-db/haproxy.cfg',
             $projectRoot . '/haproxy-db/haproxy.cfg'
         ]),
-        'web_runtime_socket' => resolveFirstExisting([
-            '/haproxy-runtime/admin.sock',
-            '/var/run/haproxy/admin.sock',
-            $projectRoot . '/haproxy-web/runtime/admin.sock'
-        ]),
-        'db_runtime_socket' => resolveFirstExisting([
-            '/haproxy-db-runtime/admin.sock',
-            '/var/run/haproxy/admin.sock',
-            $projectRoot . '/haproxy-db/runtime/admin.sock'
-        ]),
+        'web_runtime_socket' => 'tcp://haproxy-web:9999',
+        'db_runtime_socket'  => 'tcp://haproxy-db:10000',
         'web_reload_flag' => '/haproxy-runtime/reload.flag',
         'db_reload_flag'  => '/haproxy-db-runtime/reload.flag',
     ];
@@ -454,13 +446,28 @@ function requestHaProxyReload(?string $flag, string $label): void
     }
 }
 
+function normalizeRuntimeEndpoint(?string $target): ?string
+{
+    if (!$target) {
+        return null;
+    }
+    if (str_starts_with($target, 'tcp://') || str_starts_with($target, 'unix://')) {
+        return $target;
+    }
+    if (!file_exists($target)) {
+        return null;
+    }
+    return 'unix://' . $target;
+}
+
 function runtimeCommand(?string $socket, string $command): bool
 {
-    if (!$socket || !file_exists($socket)) {
+    $endpoint = normalizeRuntimeEndpoint($socket);
+    if (!$endpoint) {
         return false;
     }
 
-    $conn = @stream_socket_client('unix://' . $socket, $errno, $errStr, 1);
+    $conn = @stream_socket_client($endpoint, $errno, $errStr, 1);
     if (!$conn) {
         return false;
     }
@@ -479,11 +486,12 @@ function runtimeCommand(?string $socket, string $command): bool
 
 function runtimeCommandLines(?string $socket, string $command): ?array
 {
-    if (!$socket || !file_exists($socket)) {
+    $endpoint = normalizeRuntimeEndpoint($socket);
+    if (!$endpoint) {
         return null;
     }
 
-    $conn = @stream_socket_client('unix://' . $socket, $errno, $errStr, 1);
+    $conn = @stream_socket_client($endpoint, $errno, $errStr, 1);
     if (!$conn) {
         return null;
     }

@@ -441,9 +441,9 @@ function requestHaProxyReload(?string $flag, string $label): void
         $success = true;
     }
 
-    if (!$success) {
-        addFlash('warning', "Impossible de signaler automatiquement le rechargement {$label} (droits ?).");
-    }
+    // if (!$success) {
+    //     addFlash('warning', "Impossible de signaler automatiquement le rechargement {$label} (droits ?).");
+    // }
 }
 
 function normalizeRuntimeEndpoint(?string $target): ?string
@@ -769,7 +769,7 @@ function setServerDisabled(string $path, string $name, bool $disable): bool
     });
 }
 
-function alterServerLine(string $path, string $backend, string $targetName, callable $callback): bool
+function alterServerLine(string $path, string $backend, string $targetName, callable $callback, ?callable $parser = null): bool
 {
     $lines = file($path, FILE_IGNORE_NEW_LINES);
     if ($lines === false) {
@@ -795,7 +795,8 @@ function alterServerLine(string $path, string $backend, string $targetName, call
                 if (preg_match('/^(\s*)server/i', $rawLine, $indentMatch)) {
                     $indent = $indentMatch[1];
                 }
-                $definition = parseServerDefinition($rawLine);
+                $parserCallable = $parser ?? 'parseServerDefinition';
+                $definition = call_user_func($parserCallable, $rawLine);
                 if (!$definition) {
                     return false;
                 }
@@ -850,16 +851,17 @@ function updateDatabaseServerEntry(string $path, array $payload, string $origina
         }
         $line = buildDatabaseServerLine($definition);
         return $indent . $line;
-    });
+    }, 'parseDatabaseServerDefinition');
 }
 
 function setDatabaseServerDisabled(string $path, string $name, bool $disable): bool
 {
     return alterServerLine($path, DB_BACKEND, $name, function (array $definition, string $indent) use ($disable) {
         $definition['disabled'] = $disable;
+        $definition['backup'] = !empty($definition['backup']);
         $line = buildDatabaseServerLine($definition);
         return $indent . $line;
-    });
+    }, 'parseDatabaseServerDefinition');
 }
 
 function buildDatabaseServerLine(array $definition): string

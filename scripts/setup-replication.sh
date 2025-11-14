@@ -86,13 +86,15 @@ START SLAVE;
 EOF
 }
 
-if [ "$GTID_MODE1" = "ON" ] && [ "$GTID_MODE2" = "ON" ]; then
-  echo "🔁 Configuration GTID mysql1 <-> mysql2"
+if [ "$GTID_MODE1" = "ON" ] && [ "$GTID_MODE2" = "ON" ] && { [ "$HAS_MYSQL3" -eq 0 ] || [ "$GTID_MODE3" = "ON" ]; }; then
+  echo "🔁 Configuration GTID multi-master"
   configure_peer_gtid mysql2 mysql1
   configure_peer_gtid mysql1 mysql2
-  if [ "$HAS_MYSQL3" -eq 1 ] && [ "$GTID_MODE3" = "ON" ]; then
-    echo "🔁 Ajout de mysql3 (réplication depuis mysql1)"
+  if [ "$HAS_MYSQL3" -eq 1 ]; then
+    configure_peer_gtid mysql3 mysql1
     configure_peer_gtid mysql1 mysql3
+    configure_peer_gtid mysql3 mysql2
+    configure_peer_gtid mysql2 mysql3
   fi
 else
   echo "🔁 Configuration classique (sans GTID)"
